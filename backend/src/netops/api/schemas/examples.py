@@ -9,6 +9,7 @@ documentation (192.0.2.0/24, 198.51.100.0/24) ranges; names, MACs and serials ar
     sw-b2-03                access switch, B Block floor 2; host 10.0.20.57 on Gi1/0/17
     ap-b2-01                access point on sw-b2-03 Gi1/0/5 (not managed)
     fw-1                    pfSense edge firewall (SNMP only)
+    isp-ce-1                provider router, CDP neighbour outside the allowed subnets
 """
 
 from typing import Any
@@ -30,6 +31,7 @@ DEV_DIST_B = _id(2003)
 DEV_ACC_B2_03 = _id(2004)
 DEV_FW_1 = _id(2005)
 DEV_AP_B2_01 = _id(2006)
+DEV_ISP_CE_1 = _id(2007)
 
 IF_ACC_GI1_0_17 = _id(3001)  # host port, VLAN 20
 IF_ACC_GI1_0_49 = _id(3002)  # uplink to dist-sw-b Gi1/0/3
@@ -69,6 +71,7 @@ JOB_REFRESH = _id(7001)
 JOB_DISCOVERY = _id(7002)
 DISCOVERY_RUN = _id(7101)
 CREDENTIAL_PROFILE_RO = _id(8001)
+CREDENTIAL_PROFILE_OLD = _id(8002)
 
 # --- Times (UTC) ---------------------------------------------------------------------------
 
