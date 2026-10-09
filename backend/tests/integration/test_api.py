@@ -54,6 +54,22 @@ def test_discovery_run_and_its_job(discovered: tuple[TestClient, Recorder, dict[
     assert skipped["isp-ce1"]["local_interface"] == "GigabitEthernet0/0/0"
     assert skipped["ap1"]["reason"] == "unsupported_platform"
     assert skipped["access4.lab.example.net"]["reason"] == "auth_failed"
+    statuses = [item["status"] for item in detail["items"]]
+    assert sorted(set(statuses)) == [
+        "auth_failed",
+        "discovered",
+        "duplicate",
+        "out_of_scope",
+        "unsupported_platform",
+    ]
+    assert len(statuses) == 12
+    (duplicate,) = [i for i in detail["items"] if i["status"] == "duplicate"]
+    assert duplicate["address"] == "10.255.0.70"
+    assert duplicate["device"]["hostname"] == "dist2"
+    assert duplicate["seen_from"]["hostname"] == "access3"
+    (seed,) = [i for i in detail["items"] if i["hop"] == 0]
+    assert seed["seen_from"] is None
+    assert seed["device"]["hostname"] == "core1"
     (error,) = detail["errors"]
     assert error["target"] == "10.255.0.74"
     assert "authentication failed" in error["message"]

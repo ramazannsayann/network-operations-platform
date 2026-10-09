@@ -1634,6 +1634,12 @@ export interface components {
             occurred_at: string;
         };
         /**
+         * DiscoveryItemStatus
+         * @description Outcome for one address (or address-less neighbour) in a discovery run.
+         * @enum {string}
+         */
+        DiscoveryItemStatus: "discovered" | "duplicate" | "auth_failed" | "unreachable" | "out_of_scope" | "unsupported_platform" | "no_mgmt_ip";
+        /**
          * DiscoveryProgress
          * @example {
          *       "errors": 1,
@@ -1692,6 +1698,29 @@ export interface components {
          *         }
          *       ],
          *       "id": "5e0c7a1d-0000-4000-8000-000000007101",
+         *       "items": [
+         *         {
+         *           "address": "10.0.0.23",
+         *           "attempts": 1,
+         *           "device": {
+         *             "hostname": "sw-b2-03",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000002004",
+         *             "mgmt_ip": "10.0.0.23"
+         *           },
+         *           "hop": 2,
+         *           "is_new": false,
+         *           "local_interface": "GigabitEthernet1/0/3",
+         *           "neighbor_name": "sw-b2-03.campus.example.net",
+         *           "occurred_at": "2026-10-09T08:01:12Z",
+         *           "platform": "cisco WS-C2960X-48FPD-L",
+         *           "seen_from": {
+         *             "hostname": "dist-sw-b",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *             "mgmt_ip": "10.0.0.11"
+         *           },
+         *           "status": "discovered"
+         *         }
+         *       ],
          *       "job_id": "5e0c7a1d-0000-4000-8000-000000007002",
          *       "progress": {
          *         "errors": 1,
@@ -1759,6 +1788,11 @@ export interface components {
             skipped_neighbors: components["schemas"]["SkippedNeighbor"][];
             /** Errors */
             errors: components["schemas"]["DiscoveryError"][];
+            /**
+             * Items
+             * @description Every address the run dealt with, in BFS order, with its outcome.
+             */
+            items: components["schemas"]["DiscoveryRunItem"][];
         };
         /**
          * DiscoveryRunCreate
@@ -1790,6 +1824,68 @@ export interface components {
              * @description SSH credential profiles to try, in order. At most two logins per device: the profile that worked on it before first, then these.
              */
             credential_profile_ids: string[];
+        };
+        /**
+         * DiscoveryRunItem
+         * @description What the run did with one address (or address-less neighbour).
+         * @example {
+         *       "address": "10.0.0.23",
+         *       "attempts": 1,
+         *       "device": {
+         *         "hostname": "sw-b2-03",
+         *         "id": "5e0c7a1d-0000-4000-8000-000000002004",
+         *         "mgmt_ip": "10.0.0.23"
+         *       },
+         *       "hop": 2,
+         *       "is_new": false,
+         *       "local_interface": "GigabitEthernet1/0/3",
+         *       "neighbor_name": "sw-b2-03.campus.example.net",
+         *       "occurred_at": "2026-10-09T08:01:12Z",
+         *       "platform": "cisco WS-C2960X-48FPD-L",
+         *       "seen_from": {
+         *         "hostname": "dist-sw-b",
+         *         "id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *         "mgmt_ip": "10.0.0.11"
+         *       },
+         *       "status": "discovered"
+         *     }
+         */
+        DiscoveryRunItem: {
+            /** Address */
+            address: string | null;
+            /**
+             * Hop
+             * @description BFS level: 0 for seeds.
+             */
+            hop: number;
+            status: components["schemas"]["DiscoveryItemStatus"];
+            /** @description The device found, the one a duplicate address belongs to, or the placeholder recorded for a skipped or failed address. */
+            device: components["schemas"]["DeviceRef"] | null;
+            /** @description The device whose CDP/LLDP pointed here. */
+            seen_from: components["schemas"]["DeviceRef"] | null;
+            /**
+             * Local Interface
+             * @description Its interface towards this neighbour.
+             */
+            local_interface: string | null;
+            /** Neighbor Name */
+            neighbor_name: string | null;
+            /** Platform */
+            platform: string | null;
+            /**
+             * Attempts
+             * @description Logins tried (at most two).
+             */
+            attempts: number;
+            /** Is New */
+            is_new: boolean;
+            /** Error */
+            error: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
         };
         /**
          * DiscoveryRunPage
@@ -6638,6 +6734,29 @@ export interface operations {
                      *         }
                      *       ],
                      *       "id": "5e0c7a1d-0000-4000-8000-000000007101",
+                     *       "items": [
+                     *         {
+                     *           "address": "10.0.0.23",
+                     *           "attempts": 1,
+                     *           "device": {
+                     *             "hostname": "sw-b2-03",
+                     *             "id": "5e0c7a1d-0000-4000-8000-000000002004",
+                     *             "mgmt_ip": "10.0.0.23"
+                     *           },
+                     *           "hop": 2,
+                     *           "is_new": false,
+                     *           "local_interface": "GigabitEthernet1/0/3",
+                     *           "neighbor_name": "sw-b2-03.campus.example.net",
+                     *           "occurred_at": "2026-10-09T08:01:12Z",
+                     *           "platform": "cisco WS-C2960X-48FPD-L",
+                     *           "seen_from": {
+                     *             "hostname": "dist-sw-b",
+                     *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+                     *             "mgmt_ip": "10.0.0.11"
+                     *           },
+                     *           "status": "discovered"
+                     *         }
+                     *       ],
                      *       "job_id": "5e0c7a1d-0000-4000-8000-000000007002",
                      *       "progress": {
                      *         "errors": 1,

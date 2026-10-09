@@ -9,8 +9,11 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from netops.core.settings import get_settings
+from netops.db import models as m
+from netops.db.enums import DiscoverySource
 from netops.discovery.engine import run_discovery
 from netops_fakes.local import LocalLab
 from netops_fakes.topology import load
@@ -21,6 +24,7 @@ from tests.integration.support import (
     PASSWORD,
     USERNAME,
     Recorder,
+    run,
 )
 
 pytestmark = pytest.mark.integration
@@ -249,3 +253,36 @@ def test_layout_is_saved_validated_and_reset(discovered: Discovered) -> None:
     reset = client.put("/api/v1/topology/layout", json={"positions": []}).json()
     assert reset["positions"] == []
     assert client.get("/api/v1/topology/layout", params={"layer": "l3"}).json()["positions"]
+
+
+def test_locations_are_listed_with_paths_and_device_counts(
+    api: tuple[TestClient, Recorder],
+) -> None:
+    client, _ = api
+    assert client.get("/api/v1/locations").json()["total"] == 0
+
+    async def create(session: AsyncSession) -> None:
+        campus = m.Location(id=uuid.uuid4(), name="Campus")
+        block = m.Location(id=uuid.uuid4(), name="B Block", parent_id=campus.id)
+        session.add(campus)
+        await session.flush()
+        session.add(block)
+        await session.flush()
+        session.add(
+            m.Device(
+                id=uuid.uuid4(),
+                hostname="sw-test",
+                discovered_via=DiscoverySource.MANUAL,
+                location_id=block.id,
+            )
+        )
+        await session.commit()
+
+    run(create)
+    page = client.get("/api/v1/locations").json()
+    assert [(loc["path"], loc["device_count"]) for loc in page["items"]] == [
+        ("Campus", 0),
+        ("Campus / B Block", 1),
+    ]
+    found = client.get("/api/v1/locations", params={"q": "block"}).json()
+    assert [loc["name"] for loc in found["items"]] == ["B Block"]
