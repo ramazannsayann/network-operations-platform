@@ -33,3 +33,22 @@ async def try_take_ssh_slot(connection: AsyncConnection, slots: int) -> int | No
         if locked:
             return slot
     return None
+
+
+async def unlock_device(connection: AsyncConnection, device_id: uuid.UUID) -> None:
+    await connection.execute(
+        text("SELECT pg_advisory_unlock(:namespace, hashtext(:device_id))"),
+        {"namespace": _DEVICE_NAMESPACE, "device_id": str(device_id)},
+    )
+
+
+async def take_free_ssh_slots(connection: AsyncConnection, slots: int) -> int:
+    """Take every free slot of ``slots`` (a discovery run's parallelism); returns how many."""
+    taken = 0
+    for slot in range(slots):
+        locked = await connection.scalar(
+            text("SELECT pg_try_advisory_lock(:namespace, :slot)"),
+            {"namespace": _SSH_SLOT_NAMESPACE, "slot": slot},
+        )
+        taken += bool(locked)
+    return taken

@@ -8,7 +8,7 @@ test session, so the application database is never touched. Connections to anyth
 
 import asyncio
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import pytest
@@ -20,6 +20,7 @@ from sqlalchemy import URL, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from netops.core.settings import get_settings
 from netops.db.session import create_engine
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -112,3 +113,21 @@ async def session(migrated_database: URL) -> AsyncIterator[AsyncSession]:
             yield db_session
         await transaction.rollback()
     await engine.dispose()
+
+
+@pytest.fixture
+def app_on_test_database(monkeypatch: pytest.MonkeyPatch, migrated_database: URL) -> Iterator[None]:
+    """Point netops' own settings (used by tasks and the API) at the test database."""
+    for name, value in {
+        "POSTGRES_HOST": migrated_database.host,
+        "POSTGRES_PORT": migrated_database.port,
+        "POSTGRES_USER": migrated_database.username,
+        "POSTGRES_PASSWORD": migrated_database.password,
+        "POSTGRES_DB": migrated_database.database,
+        "SSH_RETRIES": 0,
+        "SSH_CONNECT_TIMEOUT_SECONDS": 5,
+    }.items():
+        monkeypatch.setenv(name, str(value))
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

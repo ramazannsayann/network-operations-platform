@@ -3,14 +3,14 @@
 import asyncio
 import secrets
 import uuid
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
-from sqlalchemy import URL, func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.pool import NullPool
 
 from netops.core.secrets import Secret
@@ -35,44 +35,13 @@ from netops.inventory.persistence import ingest_raw
 from netops.inventory.tasks import collect_device
 from netops.netaccess import ReadOnlyCommandError, load_device_access, run_show
 from netops_fakes.device import FakeCiscoDevice, load_outputs
+from tests.integration.support import run
 
 pytestmark = pytest.mark.integration
 
 LAB_DEVICE = Path(__file__).resolve().parents[3] / "lab" / "fixtures" / "devices" / "dist-sw1"
 USERNAME = "netops-ro"
 PASSWORD = "pw-" + secrets.token_hex(8)  # random per run: no password literal in the repo
-
-
-def run[T](make: Callable[[AsyncSession], Awaitable[T]]) -> T:
-    """Run ``make(session)`` against the database the application settings point at."""
-
-    async def main() -> T:
-        engine = create_engine(get_settings().database_url, poolclass=NullPool)
-        try:
-            async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-                return await make(session)
-        finally:
-            await engine.dispose()
-
-    return asyncio.run(main())
-
-
-@pytest.fixture
-def app_on_test_database(monkeypatch: pytest.MonkeyPatch, migrated_database: URL) -> Iterator[None]:
-    """Point netops' own settings (used by the Celery task) at the test database."""
-    for name, value in {
-        "POSTGRES_HOST": migrated_database.host,
-        "POSTGRES_PORT": migrated_database.port,
-        "POSTGRES_USER": migrated_database.username,
-        "POSTGRES_PASSWORD": migrated_database.password,
-        "POSTGRES_DB": migrated_database.database,
-        "SSH_RETRIES": 0,
-        "SSH_CONNECT_TIMEOUT_SECONDS": 5,
-    }.items():
-        monkeypatch.setenv(name, str(value))
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
 
 
 def start_fake(outputs: dict[str, str] | None = None, password: str = PASSWORD) -> FakeCiscoDevice:
