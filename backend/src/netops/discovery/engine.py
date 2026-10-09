@@ -30,14 +30,13 @@ import asyncio
 import ipaddress
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Coroutine, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool
 
 from netops.core.secrets import redact
 from netops.core.settings import Settings
@@ -87,6 +86,8 @@ PHASE_A_COMMANDS = (
     *COLLECTORS[CollectionKind.NEIGHBORS].commands,
     ROUTES_COMMAND,
 )
+# Devices whose collected data is stored at the same time (one database session each).
+STORE_CONCURRENCY = 8
 _SOURCES = {NeighborProtocol.CDP: DiscoverySource.CDP, NeighborProtocol.LLDP: DiscoverySource.LLDP}
 _SKIPPED = frozenset(
     {
@@ -157,7 +158,8 @@ async def run_discovery(
 
     Raises NoSshSlotError (before touching the run) when no SSH session slot is free.
     """
-    engine = create_engine(settings.database_url, poolclass=NullPool)
+    # The lock connection, the run's own session and one per device being stored.
+    engine = create_engine(settings.database_url, pool_size=STORE_CONCURRENCY + 2, max_overflow=0)
     try:
         async with engine.connect() as connection:
             locks = await connection.execution_options(isolation_level="AUTOCOMMIT")
@@ -192,8 +194,9 @@ class Discovery:
         # Addresses queued or dealt with in this run, and address-less neighbours recorded.
         self.seen: set[str] = set()
         self.seen_names: set[str] = set()
-        # Devices reached in this run -> the address they were reached at.
+        # Devices reached in this run -> the address they were reached at, and their serials.
         self.reached: dict[uuid.UUID, str] = {}
+        self.serial_owner: dict[str, uuid.UUID] = {}
         self.job_id: uuid.UUID | None = None
 
     # --- the run --------------------------------------------------------------------------
@@ -308,6 +311,7 @@ class Discovery:
 
         next_level: list[Target] = []
         to_collect: list[tuple[Device, CredentialProfile]] = []
+        stores = []
         for login in sorted(logins, key=lambda item: _address_key(item.target.address)):
             result, profile = login.result, login.profile
             if result is None or result.error or profile is None:
@@ -319,10 +323,15 @@ class Discovery:
             device, locked = identified
             if locked:
                 to_collect.append((device, profile))
+                kinds = [*PHASE_A_KINDS]
+                if CollectionKind.ROUTES in kinds_for(device.device_type):
+                    kinds.append(CollectionKind.ROUTES)
+                stores.append(self._store(device.id, kinds, login.started_at, result))
             next_level.extend(await self._neighbors(session, device, login.target, result))
 
         try:
-            await self._collect_rest(session, to_collect)
+            await _bounded(stores)
+            await self._collect_rest(to_collect)
         finally:
             for device, _ in to_collect:
                 await unlock_device(self.locks, device.id)
@@ -424,11 +433,11 @@ class Discovery:
     async def _identify(
         self, session: AsyncSession, login: Login, result: ShowResult, profile: CredentialProfile
     ) -> tuple[Device, bool] | None:
-        """Find or create the device behind a successful login and store phase A's runs.
+        """Find (by serial, then address) or create the device behind a successful login.
 
         Returns (device, locked), or None if the address is a duplicate or not a supported
-        device. ``locked``: this run holds the device's collection lock (it is released at
-        the end of the level); without it nothing is stored for the device.
+        device. ``locked``: this run holds the device's collection lock (released at the end
+        of the level); only then are its runs stored (by the caller, in parallel).
         """
         target, outputs = login.target, result.outputs
         facts = _parse(outputs, "show version")
@@ -444,17 +453,18 @@ class Discovery:
         routes = _parse(outputs, ROUTES_COMMAND)
         device_type = classify.device_type(facts, routes if isinstance(routes, list) else None)
 
-        device = await self._device_by_serial(session, facts.serials)
-        if device is not None and device.id in self.reached:
+        owner = next((self.serial_owner[s] for s in facts.serials if s in self.serial_owner), None)
+        if owner is not None:
             await self._item(
                 session,
                 target,
                 DiscoveryItemStatus.DUPLICATE,
-                device_id=device.id,
+                device_id=owner,
                 attempts=login.attempts,
-                error=f"same chassis as {self.reached[device.id]}",
+                error=f"same chassis as {self.reached[owner]}",
             )
             return None
+        device = await self._device_by_serial(session, facts.serials)
         if device is None:
             device = await session.scalar(select(Device).where(Device.mgmt_ip == target.address))
         if device is None and facts.hostname:
@@ -492,17 +502,9 @@ class Discovery:
         device.last_seen_at = now
         await session.commit()
         self.reached[device.id] = target.address
+        self.serial_owner.update(dict.fromkeys(facts.serials, device.id))
 
         locked = await try_lock_device(self.locks, device.id)
-        if locked:
-            kinds = [*PHASE_A_KINDS]
-            if CollectionKind.ROUTES in kinds_for(device_type):
-                kinds.append(CollectionKind.ROUTES)
-            for kind in kinds:
-                run_id = await start_run(
-                    session, device.id, kind, CollectionTrigger.DISCOVERY, login.started_at
-                )
-                await complete_run(session, device.id, run_id, outputs, result.command_errors)
         await self._item(
             session,
             target,
@@ -573,38 +575,48 @@ class Discovery:
 
     # --- phase B: everything else -------------------------------------------------------------
 
-    async def _collect_rest(
-        self, session: AsyncSession, devices: Sequence[tuple[Device, CredentialProfile]]
-    ) -> None:
+    async def _collect_rest(self, devices: Sequence[tuple[Device, CredentialProfile]]) -> None:
+        """Phase B: the remaining collectors of each device's type, one session per device."""
         by_type: dict[DeviceType, list[tuple[Device, CredentialProfile]]] = {}
         for device, profile in devices:
             by_type.setdefault(device.device_type, []).append((device, profile))
+        stores = []
         for device_type, members in by_type.items():
             done = {*PHASE_A_KINDS, CollectionKind.ROUTES}
             kinds = [k for k in kinds_for(device_type) if k not in done]
-            commands = list(dict.fromkeys(c for k in kinds for c in commands_for(k, device_type)))
             if not kinds:
                 continue
-            runs = {
-                device.id: {
-                    kind: await start_run(session, device.id, kind, CollectionTrigger.DISCOVERY)
-                    for kind in kinds
-                }
-                for device, _ in members
-            }
+            commands = list(dict.fromkeys(c for k in kinds for c in commands_for(k, device_type)))
             accesses = [device_access(d, p, self.settings.ssh_port) for d, p in members]
+            started_at = utcnow()
             results = await asyncio.to_thread(
                 run_show, accesses, commands, self.settings, self.resolve
             )
-            for device, _ in members:
-                result = results[device.id]
-                for run_id in runs[device.id].values():
-                    if result.error:
-                        await fail_run(session, run_id, result.error)
-                    else:
-                        await complete_run(
-                            session, device.id, run_id, result.outputs, result.command_errors
-                        )
+            stores += [
+                self._store(device.id, kinds, started_at, results[device.id])
+                for device, _ in members
+            ]
+        await _bounded(stores)
+
+    async def _store(
+        self,
+        device_id: uuid.UUID,
+        kinds: Sequence[CollectionKind],
+        started_at: datetime,
+        result: ShowResult,
+    ) -> None:
+        """Record one collection run per kind from one session's output (M2 collectors)."""
+        async with self.sessions() as session:
+            for kind in kinds:
+                run_id = await start_run(
+                    session, device_id, kind, CollectionTrigger.DISCOVERY, started_at
+                )
+                if result.error:
+                    await fail_run(session, run_id, result.error)
+                else:
+                    await complete_run(
+                        session, device_id, run_id, result.outputs, result.command_errors
+                    )
 
     # --- recording ------------------------------------------------------------------------
 
@@ -711,6 +723,17 @@ class Discovery:
             self.counters.skipped += 1
         elif status in _ERRORS:
             self.counters.errors += 1
+
+
+async def _bounded(work: Sequence[Coroutine[Any, Any, None]]) -> None:
+    """Await ``work``, at most STORE_CONCURRENCY at a time."""
+    limit = asyncio.Semaphore(STORE_CONCURRENCY)
+
+    async def one(coroutine: Coroutine[Any, Any, None]) -> None:
+        async with limit:
+            await coroutine
+
+    await asyncio.gather(*(one(c) for c in work))
 
 
 def _parse(outputs: dict[str, str], command: str) -> object | None:

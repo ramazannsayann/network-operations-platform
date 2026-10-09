@@ -111,4 +111,5 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config --disable-socket --allow-unix-socket -m 'not integration'"
 markers = [
     "integration: needs the compose database on localhost; run with `make test-integration`",
+    "scale: discovery of a generated topology (also integration); run with `make test-scale`",
 ]

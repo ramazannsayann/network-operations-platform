@@ -82,7 +82,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
       - name: Integration tests
-        run: uv run pytest -m integration
+        run: uv run pytest -m "integration and not scale"
+      - name: Discovery scale test (50 generated devices, prints the duration)
+        run: uv run pytest -m scale
+        env:
+          SCALE_DEVICES: "50"
 
   frontend:
     name: Frontend (eslint, prettier, build)
