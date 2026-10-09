@@ -1,0 +1,9 @@
+Value Required INTERFACE (\S+)
+Value LATE_COLLISIONS (\d+)
+
+# Late collisions per interface (a duplex-mismatch symptom), which the ntc-templates
+# show interfaces template does not capture.
+Start
+  ^\S+\s+is\s+.*line\s+protocol -> Continue.Record
+  ^${INTERFACE}\s+is\s+.*line\s+protocol
+  ^\s+\d+\s+babbles,\s+${LATE_COLLISIONS}\s+late\s+collision

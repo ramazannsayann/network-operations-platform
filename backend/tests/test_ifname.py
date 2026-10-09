@@ -2,7 +2,8 @@
 
 import pytest
 
-from netops.core.ifname import normalize
+from netops.core.ifname import interface_kind, normalize
+from netops.db.enums import InterfaceKind
 
 
 @pytest.mark.parametrize(
@@ -125,3 +126,24 @@ def test_spellings_of_one_port_converge() -> None:
 def test_empty_name_is_rejected(raw: str) -> None:
     with pytest.raises(ValueError, match="empty"):
         normalize(raw)
+
+
+@pytest.mark.parametrize(
+    ("name", "kind"),
+    [
+        ("Gi1/0/1", InterfaceKind.PHYSICAL),
+        ("Twe1/0/1", InterfaceKind.PHYSICAL),
+        ("Et0/0", InterfaceKind.PHYSICAL),
+        ("Po10", InterfaceKind.PORT_CHANNEL),
+        ("Vlan20", InterfaceKind.SVI),
+        ("Lo0", InterfaceKind.LOOPBACK),
+        ("Tu100", InterfaceKind.TUNNEL),
+        ("mgmt0", InterfaceKind.MANAGEMENT),
+        ("Gi0/0.100", InterfaceKind.OTHER),  # subinterface
+        ("Nu0", InterfaceKind.OTHER),
+        ("Ap1/0/1", InterfaceKind.OTHER),  # app-hosting interface
+        ("CPU", InterfaceKind.OTHER),
+    ],
+)
+def test_interface_kind(name: str, kind: InterfaceKind) -> None:
+    assert interface_kind(name) is kind

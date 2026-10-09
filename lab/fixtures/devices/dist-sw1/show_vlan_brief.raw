@@ -1,0 +1,13 @@
+
+VLAN Name                             Status    Ports
+---- -------------------------------- --------- -------------------------------
+1    default                          active    Gi1/0/6, Gi1/0/7, Gi1/0/8, Gi1/0/9
+                                                Gi1/0/10, Gi1/0/11, Gi1/0/12
+20   STAFF                            active    Gi1/0/1, Gi1/0/2
+30   APS                              active    Gi1/0/4, Gi1/0/5
+99   MGMT                             active    
+666  PARKING                          act/lshut 
+1002 fddi-default                     act/unsup 
+1003 token-ring-default               act/unsup 
+1004 fddinet-default                  act/unsup 
+1005 trnet-default                    act/unsup 
