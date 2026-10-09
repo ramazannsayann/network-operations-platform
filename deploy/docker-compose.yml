@@ -1,0 +1,126 @@
+# NetOps platform stack for development and demos.
+#
+#   make up        build and start everything (http://localhost:8080)
+#   make migrate   apply database migrations
+#   make logs      follow logs          make down   stop (data volume is kept)
+#
+# Plain compose works too: `docker compose up --build` from this directory.
+# All configuration comes from deploy/.env (created from .env.example by `make up`).
+
+name: netops
+
+x-backend: &backend
+  build:
+    context: ../backend
+  image: netops-backend:dev
+  restart: unless-stopped
+  environment:
+    APP_ENV: ${APP_ENV:-development}
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    LOG_FORMAT: ${LOG_FORMAT:-json}
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in deploy/.env}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/1
+    CELERY_RESULT_BACKEND: redis://redis:6379/2
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    # Exact tag on purpose: TimescaleDB upgrades need ALTER EXTENSION, so bump deliberately.
+    image: timescale/timescaledb:2.30.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
+    healthcheck:
+      # -h 127.0.0.1: only the final server listens on TCP, not the temporary one used during init.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    <<: *backend
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  worker:
+    <<: *backend
+    command:
+      - celery
+      - --app=netops.workers.celery_app:celery_app
+      - worker
+      - --concurrency=${CELERY_CONCURRENCY:-2}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - celery --app=netops.workers.celery_app:celery_app inspect ping --destination "celery@$$HOSTNAME" --timeout 5
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
+
+  scheduler:
+    <<: *backend
+    command:
+      - celery
+      - --app=netops.workers.celery_app:celery_app
+      - beat
+      - --schedule=/tmp/celerybeat-schedule
+
+  web:
+    build:
+      context: ../frontend
+      additional_contexts:
+        nginx-conf: ./nginx
+    image: netops-web:dev
+    restart: unless-stopped
+    ports:
+      # Localhost only until M7 adds authentication; set WEB_BIND=0.0.0.0 to share on a LAN.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  db-data:
