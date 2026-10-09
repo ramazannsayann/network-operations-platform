@@ -6,10 +6,12 @@ IOS/IOS-XE campus networks. Graduation project.
 Design reference: the project proposal,
 [docs/proposal/proposal-v2.pdf](docs/proposal/proposal-v2.pdf) (in Turkish).
 
-> Status: discovery (M1) and inventory collection (M2) work against a fake lab; the
-> device, discovery and job endpoints are implemented, the UI screens and the other modules
-> are not yet. The stack runs end to end (UI → nginx → API → TimescaleDB and Redis, plus
-> Celery workers).
+> Status: discovery (M1) and inventory collection (M2) work against a fake lab, with the
+> first UI screens: topology map (L2/L3), devices, device detail and discovery. Monitoring,
+> configuration management, diagnosis and authentication come next. The stack runs end to
+> end (UI → nginx → API → TimescaleDB and Redis, plus Celery workers).
+
+![Topology map of the fake lab](docs/screenshots/map-l2-light.png)
 
 ## Quickstart
 
@@ -70,7 +72,8 @@ New migration: `cd backend && uv run alembic revision --autogenerate -m "add dev
 The REST API is defined contract-first: [docs/api/openapi.json](docs/api/openapi.json)
 (browsable at <http://localhost:8080/api/docs> when the stack runs), conventions in
 [ADR-0003](docs/adr/0003-api-conventions.md), live updates in
-[docs/api/websocket.md](docs/api/websocket.md). Devices, discovery runs and jobs are
+[docs/api/websocket.md](docs/api/websocket.md). Devices, discovery runs, jobs, topology
+(with its layout and changes), credential profiles (names only) and the location list are
 implemented; the other endpoints still answer `501 Not Implemented`.
 
 After changing schemas or routers in `backend/src/netops/api/`, regenerate and commit the
@@ -91,6 +94,25 @@ cd frontend && npm run dev:mock   # UI on http://localhost:5173, /api proxied to
 The mock enforces the declared security: send any `Authorization: Bearer <token>` header
 (tokens are not checked yet). Other responses can be requested with a `Prefer` header,
 e.g. `Prefer: code=404` or `Prefer: example=not_found` on `/api/v1/hosts/locate`.
+
+## User interface
+
+<http://localhost:8080> after `make up` (Turkish by default; EN in the header switches the
+language, the theme follows the system or the header menu):
+
+- **Harita** (map): the topology by role, L2 (physical links, EtherChannels as one thick
+  edge) or L3 (subnets, HSRP gateways); search, role/location filters, a time selector for
+  the past state, saved layouts and the list of topology changes.
+- **Cihazlar** (devices): inventory with search, filters and sorting; the detail page shows
+  facts, interfaces, data freshness and "Şimdi yenile" (collect now).
+- **Keşif** (discovery): start a discovery (seeds, allowed subnets, credential profiles) and
+  follow its runs address by address.
+
+Screenshots (fake lab, light and dark) are in [docs/screenshots/](docs/screenshots/).
+Frontend tests: `cd frontend && npm test` (Vitest) and `npm run e2e` (Playwright against the
+Prism mock); with the fake lab running, `npm run e2e:fakelab` discovers it from the UI and
+`npm run screenshots` refreshes the screenshots. Frontend decisions:
+[ADR-0006](docs/adr/0006-frontend.md).
 
 ## Fake lab and discovery
 

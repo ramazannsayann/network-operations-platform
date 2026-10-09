@@ -15,9 +15,9 @@ decisions and their reasons are in
 Current state: scaffolding, the shared data model, the v1 API contract, encrypted
 credential profiles, the read-only SSH layer, parsers for 16 IOS/IOS-XE show commands, the
 M2 collectors (`collect_device`), M1 discovery (BFS over CDP/LLDP, links, roles;
-`netops.discover`), the device/discovery/job endpoints, the `netops` operator CLI and the
-fake lab. Other endpoints still answer 501. No topology endpoints, SNMP polling, config
-management or UI screens yet.
+`netops.discover`), the device/discovery/job/topology endpoints, the `netops` operator CLI,
+the fake lab and the first UI (shell, map, devices, discovery). Other endpoints still answer
+501. No SNMP polling, alarms, config management or authentication yet.
 
 ## Architecture
 
@@ -148,6 +148,9 @@ make openapi    # regenerate docs/api/openapi.json and frontend/src/api/schema.d
 make mock       # Prism mock server for the contract on :4010 (UI: cd frontend && npm run dev:mock)
 ```
 
+Frontend tests (in `frontend/`): `npm test` (Vitest), `npm run e2e` (Playwright smoke against
+the Prism mock), `npm run e2e:fakelab` and `npm run screenshots` (real stack + fake lab).
+
 Backend only (in `backend/`): `uv run pytest`, `uv run ruff check .`, `uv run mypy`,
 `uv run alembic revision --autogenerate -m "..."` (needs a reachable database; see
 `backend/.env.example`). Frontend only (in `frontend/`): `npm run dev`, `npm run lint`,
@@ -169,7 +172,13 @@ Backend only (in `backend/`): `uv run pytest`, `uv run ruff check .`, `uv run my
 - Every index gets a short comment saying which query it serves.
 - Long-running or device-facing work runs in Celery tasks, never in API request handlers.
   Tasks must be idempotent.
-- Frontend: TypeScript strict, no `any`; API calls live in `frontend/src/api/`.
+- Frontend ([ADR-0006](docs/adr/0006-frontend.md)): TypeScript strict, no `any`; server
+  state only through the TanStack Query hooks in `frontend/src/api/queries.ts` (typed
+  openapi-fetch client); Mantine components; every user-facing string in both
+  `src/i18n/locales/tr.json` (default) and `en.json` (a test checks the keys match), network
+  terms (VLAN, trunk, EtherChannel, HSRP, port names, roles) stay English; status is never
+  shown by colour alone. Pure logic gets Vitest tests next to it; user flows get Playwright
+  tests in `frontend/e2e/` (smoke against the Prism mock in CI).
 - Commits: imperative mood, short subject line (≤ 72 chars), e.g. `Add SNMP interface poller`;
   one logical change per commit. Record significant decisions as a new ADR in `docs/adr/`.
 
