@@ -20,6 +20,8 @@ from sqlalchemy import URL, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from netops.db.session import create_engine
+
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 LOCAL_HOSTS = ["127.0.0.1", "::1"]
 
@@ -101,7 +103,7 @@ def anyio_backend() -> str:
 @pytest.fixture
 async def session(migrated_database: URL) -> AsyncIterator[AsyncSession]:
     """A session inside a transaction that is rolled back after the test."""
-    engine = create_async_engine(migrated_database, poolclass=NullPool)
+    engine = create_engine(migrated_database, poolclass=NullPool)
     async with engine.connect() as connection:
         transaction = await connection.begin()
         async with AsyncSession(
