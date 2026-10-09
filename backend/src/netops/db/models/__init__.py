@@ -12,6 +12,7 @@ from netops.db.models.diagnosis import Finding
 from netops.db.models.discovery import DiscoveryRun, DiscoveryRunItem
 from netops.db.models.inventory import Device, DeviceSerial, Interface, InterfaceAddress, Location
 from netops.db.models.jobs import Job
+from netops.db.models.layout import TopologyPosition
 from netops.db.models.monitoring import Alarm, Event, Incident, Metric
 from netops.db.models.observations import (
     ArpEntry,
@@ -56,5 +57,6 @@ __all__ = [
     "RouteEntry",
     "StpInstanceObservation",
     "StpPortObservation",
+    "TopologyPosition",
     "VlanObservation",
 ]
