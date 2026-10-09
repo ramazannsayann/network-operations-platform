@@ -3,7 +3,7 @@
 COMPOSE := docker compose -f deploy/docker-compose.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help install up down logs ps migrate test test-integration lint format
+.PHONY: help install up down logs ps migrate test test-integration lint format openapi mock
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-9s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -41,6 +41,13 @@ test-integration: deploy/.env ## Run integration tests against the compose db (n
 	set -a && . ./deploy/.env && set +a && cd backend && \
 	TEST_POSTGRES_PORT="$${DB_HOST_PORT:-5433}" TEST_POSTGRES_USER="$$POSTGRES_USER" \
 	TEST_POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" uv run pytest -m integration
+
+openapi: ## Regenerate docs/api/openapi.json and the frontend's TypeScript types from the code
+	cd backend && uv run python -m netops.api.export_openapi ../docs/api/openapi.json
+	cd frontend && npm run gen:api
+
+mock: ## Serve the API contract with example data (Prism) on http://127.0.0.1:4010
+	cd frontend && npm run mock
 
 lint: ## Lint, format-check and type-check backend and frontend
 	cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy

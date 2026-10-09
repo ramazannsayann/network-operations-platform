@@ -15,7 +15,7 @@ concurrency:
 jobs:
   backend:
     name: Backend (ruff, mypy, pytest)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend
@@ -36,12 +36,14 @@ jobs:
         run: uv run ruff format --check .
       - name: Type-check (mypy strict)
         run: uv run mypy
+      - name: OpenAPI document is up to date
+        run: uv run python -m netops.api.export_openapi --check ../docs/api/openapi.json
       - name: Test
         run: uv run pytest
 
   backend-integration:
     name: Backend integration (TimescaleDB)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       db:
         # Keep in sync with deploy/docker-compose.yml (checked by the first step).
@@ -84,7 +86,7 @@ jobs:
 
   frontend:
     name: Frontend (eslint, prettier, build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -103,12 +105,19 @@ jobs:
         run: npm run lint
       - name: Check formatting
         run: npm run format:check
+      - name: Generated API types are up to date
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.d.ts || {
+            echo "::error::frontend/src/api/schema.d.ts is stale: run 'make openapi' and commit it"
+            exit 1
+          }
       - name: Type-check and build
         run: npm run build
 
   docker:
     name: Docker Compose build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
