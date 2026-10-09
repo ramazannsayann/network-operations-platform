@@ -4,7 +4,7 @@ COMPOSE := docker compose -f deploy/docker-compose.yml
 
 .DEFAULT_GOAL := help
 .PHONY: help install env up down logs ps migrate test test-integration test-scale lint format openapi mock \
-	fakelab-compose fakelab-up fakelab-seed fakelab-discover fakelab-down
+	fakelab-compose fakelab-up fakelab-seed fakelab-discover fakelab-accuracy fakelab-down
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -103,6 +103,11 @@ fakelab-discover: ## Discover the fake lab from core1 and wait for the result
 	$(COMPOSE_FAKELAB) exec -T api netops discover --seed $(FAKELAB_SEED) \
 	  --subnet $(FAKELAB_SUBNET) --profile fakelab-outdated --profile fakelab
 	$(COMPOSE_FAKELAB) exec -T api netops devices list
+
+fakelab-accuracy: ## Compare the inventory with lab/fakelab/topology.yaml (precision/recall)
+	set -a && . ./deploy/.env && set +a && cd backend && \
+	POSTGRES_HOST=127.0.0.1 POSTGRES_PORT="$${DB_HOST_PORT:-5433}" \
+	uv run python ../tools/eval/discovery_accuracy.py ../lab/fakelab/topology.yaml
 
 fakelab-down: ## Stop the whole stack including the fake lab (start again with make up)
 	$(COMPOSE_FAKELAB) down
