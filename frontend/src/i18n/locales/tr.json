@@ -1,0 +1,316 @@
+{
+  "app": {
+    "title": "NetOps",
+    "subtitle": "Kampüs ağı yönetimi"
+  },
+  "nav": {
+    "main": "Ana menü",
+    "map": "Harita",
+    "devices": "Cihazlar",
+    "discovery": "Keşif",
+    "alarms": "Alarmlar",
+    "config": "Config",
+    "soon": "yakında",
+    "toggle": "Menüyü aç/kapat"
+  },
+  "header": {
+    "health": {
+      "ok": "API çalışıyor",
+      "degraded": "API sorunlu",
+      "down": "API'ye ulaşılamıyor",
+      "checking": "API kontrol ediliyor"
+    },
+    "theme": {
+      "label": "Tema",
+      "light": "Açık tema",
+      "dark": "Koyu tema",
+      "auto": "Sistem teması"
+    },
+    "language": "Dil"
+  },
+  "common": {
+    "loading": "Yükleniyor…",
+    "retry": "Tekrar dene",
+    "none": "—",
+    "all": "Tümü",
+    "clear": "Temizle",
+    "close": "Kapat",
+    "details": "Ayrıntılar",
+    "never": "hiç",
+    "unknown": "bilinmiyor",
+    "error": "Bir hata oluştu",
+    "apiError": "API hatası",
+    "notFound": "Sayfa bulunamadı",
+    "backHome": "Haritaya dön",
+    "page": "Sayfa"
+  },
+  "enums": {
+    "managementStatus": {
+      "managed": "Yönetiliyor",
+      "out_of_scope": "Kapsam dışı",
+      "auth_failed": "Kimlik doğrulama başarısız",
+      "unreachable": "Erişilemiyor",
+      "unsupported_platform": "Desteklenmeyen platform",
+      "manual": "Elle eklendi"
+    },
+    "deviceType": {
+      "switch": "Switch",
+      "l3_switch": "L3 switch",
+      "router": "Router",
+      "firewall": "Firewall",
+      "ap": "AP",
+      "wlc": "WLC",
+      "unknown": "Bilinmiyor",
+      "subnet": "Alt ağ"
+    },
+    "role": {
+      "core": "Core",
+      "distribution": "Distribution",
+      "access": "Access",
+      "edge": "Edge",
+      "unknown": "Bilinmiyor"
+    },
+    "jobStatus": {
+      "queued": "Sırada",
+      "running": "Çalışıyor",
+      "succeeded": "Tamamlandı",
+      "failed": "Başarısız"
+    },
+    "itemStatus": {
+      "discovered": "Bulundu",
+      "duplicate": "Aynı cihazın başka adresi",
+      "auth_failed": "Kimlik doğrulama başarısız",
+      "unreachable": "Erişilemiyor",
+      "out_of_scope": "Kapsam dışı",
+      "unsupported_platform": "Desteklenmeyen platform",
+      "no_mgmt_ip": "Yönetim adresi yok"
+    },
+    "collectionKind": {
+      "facts": "Cihaz bilgileri",
+      "interfaces": "Arayüzler",
+      "neighbors": "Komşular (CDP/LLDP)",
+      "vlans": "VLAN'lar",
+      "mac_table": "MAC tablosu",
+      "arp_table": "ARP tablosu",
+      "routes": "Yönlendirme tablosu",
+      "stp": "Spanning tree",
+      "hsrp": "HSRP",
+      "ospf": "OSPF",
+      "config": "Konfigürasyon"
+    },
+    "collectionStatus": {
+      "running": "Çalışıyor",
+      "success": "Başarılı",
+      "partial": "Kısmi",
+      "failed": "Başarısız"
+    },
+    "reachability": {
+      "reachable": "Erişilebilir",
+      "unreachable": "Erişilemiyor",
+      "unknown": "Bilinmiyor"
+    },
+    "discoverySource": {
+      "seed": "Başlangıç adresi",
+      "cdp": "CDP",
+      "lldp": "LLDP",
+      "arp": "ARP",
+      "manual": "Elle"
+    }
+  },
+  "devices": {
+    "title": "Cihazlar",
+    "search": "Ara",
+    "searchPlaceholder": "Hostname, IP veya seri no",
+    "filterType": "Tür",
+    "filterRole": "Rol",
+    "filterStatus": "Yönetim durumu",
+    "filterLocation": "Konum",
+    "count_one": "{{count}} cihaz",
+    "count_other": "{{count}} cihaz",
+    "columns": {
+      "hostname": "Hostname",
+      "mgmtIp": "Yönetim IP",
+      "type": "Tür",
+      "role": "Rol",
+      "status": "Yönetim durumu",
+      "model": "Model",
+      "serials": "Seri no",
+      "lastSeen": "Son görülme"
+    },
+    "sortBy": "{{column}} sütununa göre sırala",
+    "empty": {
+      "title": "Henüz cihaz yok",
+      "body": "Cihazlar keşif ile envantere eklenir.",
+      "action": "Keşif başlat"
+    },
+    "noMatch": "Filtrelere uyan cihaz yok."
+  },
+  "device": {
+    "back": "Cihazlar",
+    "facts": "Cihaz bilgileri",
+    "model": "Model",
+    "os": "İşletim sistemi",
+    "serials": "Seri numaraları",
+    "stackMember": "üye {{member}}",
+    "mgmtIp": "Yönetim IP",
+    "type": "Tür",
+    "role": "Rol",
+    "location": "Konum",
+    "status": "Yönetim durumu",
+    "reachability": "Erişilebilirlik",
+    "discoveredVia": "Bulunma yolu",
+    "lastPolled": "Son toplama",
+    "firstSeen": "İlk görülme",
+    "freshness": {
+      "title": "Veri tazeliği",
+      "kind": "Veri türü",
+      "lastStatus": "Son durum",
+      "lastRun": "Son toplama",
+      "lastSuccess": "Son başarılı toplama",
+      "empty": "Bu cihazdan henüz veri toplanmadı."
+    },
+    "refresh": {
+      "button": "Şimdi yenile",
+      "running": "Veriler toplanıyor…",
+      "done": "Veriler yenilendi.",
+      "failed": "Yenileme başarısız: {{error}}",
+      "notManaged": "Bu cihaz yönetilmiyor; yenilenemez."
+    },
+    "interfaces": {
+      "title": "Arayüzler",
+      "count_one": "{{count}} arayüz",
+      "count_other": "{{count}} arayüz",
+      "filter": "Arayüz ara",
+      "name": "Arayüz",
+      "description": "Açıklama",
+      "status": "Durum",
+      "speed": "Hız / dupleks",
+      "mode": "Mod",
+      "vlans": "VLAN",
+      "channel": "Port-channel",
+      "mac": "MAC",
+      "up": "up",
+      "down": "down",
+      "adminDown": "shutdown",
+      "errDisabled": "err-disabled",
+      "native": "native {{vlan}}",
+      "empty": "Henüz arayüz verisi yok."
+    }
+  },
+  "discovery": {
+    "title": "Keşif",
+    "form": {
+      "title": "Yeni keşif",
+      "seeds": "Başlangıç adresleri",
+      "seedsHelp": "Keşfin başlayacağı cihazların IP adresleri; Enter, boşluk veya virgülle ayırın.",
+      "subnets": "İzin verilen alt ağlar",
+      "subnetsHelp": "Yalnızca bu CIDR aralıklarındaki cihazlara bağlanılır; dışındakiler kaydedilir ama bağlanılmaz.",
+      "profiles": "Kimlik bilgisi profilleri",
+      "profilesHelp": "Sırayla denenir; hesap kilitlenmesin diye cihaz başına en fazla iki giriş denemesi yapılır.",
+      "noProfiles": "Henüz kimlik bilgisi profili yok. CLI ile ekleyin: netops credentials add",
+      "submit": "Keşfi başlat"
+    },
+    "validation": {
+      "seedsRequired": "En az bir başlangıç adresi girin.",
+      "seedInvalid": "Geçersiz IP adresi.",
+      "seedOutsideSubnets": "Başlangıç adresi izin verilen alt ağların dışında.",
+      "subnetsRequired": "En az bir alt ağ girin.",
+      "subnetInvalid": "Geçersiz CIDR (örnek: 10.0.0.0/16).",
+      "profilesRequired": "En az bir kimlik bilgisi profili seçin."
+    },
+    "runs": {
+      "title": "Keşif çalışmaları",
+      "requested": "İstenme zamanı",
+      "status": "Durum",
+      "found": "Bulunan",
+      "skipped": "Atlanan",
+      "errors": "Hata",
+      "duration": "Süre",
+      "empty": "Henüz keşif çalıştırılmadı.",
+      "open": "Ayrıntılar"
+    },
+    "run": {
+      "title": "Keşif çalışması",
+      "back": "Keşif",
+      "running": "Keşif sürüyor; sonuçlar geldikçe güncelleniyor.",
+      "failed": "Keşif başarısız: {{error}}",
+      "seeds": "Başlangıç adresleri",
+      "subnets": "İzin verilen alt ağlar",
+      "started": "Başlama",
+      "finished": "Bitiş",
+      "progress": {
+        "queued": "Sırada",
+        "scanned": "Denenen",
+        "found": "Bulunan",
+        "skipped": "Atlanan",
+        "errors": "Hata"
+      },
+      "columns": {
+        "address": "Adres",
+        "device": "Cihaz",
+        "hop": "Adım",
+        "seenFrom": "Görüldüğü yer",
+        "attempts": "Giriş denemesi",
+        "note": "Not"
+      },
+      "newDevice": "yeni",
+      "noItems": "Henüz adres yok.",
+      "duplicateNote": "{{device}} ile aynı kasa (aynı seri numarası)",
+      "authFailedNote": "SSH girişi reddedildi ({{attempts}} deneme)",
+      "unreachableNote": "SSH ile bağlanılamadı"
+    }
+  },
+  "topology": {
+    "title": "Harita",
+    "layer": "Katman",
+    "l2": "L2 (fiziksel)",
+    "l3": "L3 (alt ağlar)",
+    "search": "Cihaz bul",
+    "searchPlaceholder": "Hostname veya IP",
+    "role": "Rol",
+    "location": "Konum",
+    "at": "Zaman",
+    "atHelp": "Ağın geçmişteki halini göster",
+    "now": "Şimdi",
+    "saveLayout": "Düzeni kaydet",
+    "autoLayout": "Otomatik düzen",
+    "layoutSaved": "Düzen kaydedildi.",
+    "layoutReset": "Otomatik düzene dönüldü.",
+    "changes": "Değişiklikler",
+    "summary": "{{nodes}} düğüm, {{edges}} bağlantı",
+    "historic": "{{time}} tarihindeki durum gösteriliyor.",
+    "empty": {
+      "title": "Haritada gösterilecek cihaz yok",
+      "body": "Ağı haritada görmek için önce keşif çalıştırın.",
+      "filtered": "Seçili filtrelere uyan cihaz yok."
+    },
+    "legend": {
+      "title": "Gösterim",
+      "managed": "Yönetilen cihaz (düz kenarlık)",
+      "outOfScope": "Kapsam dışı (kesikli, soluk)",
+      "authFailed": "Kimlik doğrulama başarısız (kırmızı, çift kenarlık)",
+      "unreachable": "Erişilemiyor (turuncu, kesikli)",
+      "unsupported": "Desteklenmeyen platform / AP (noktalı)",
+      "etherchannel": "EtherChannel (kalın çizgi, üye sayısı)",
+      "subnet": "Alt ağ (L3)",
+      "shapes": "Şekil: router ◆, L3 switch ■, switch ▬, AP ▲"
+    },
+    "panel": {
+      "title": "Seçili düğüm",
+      "openDevice": "Cihaz ayrıntıları",
+      "gateways": "HSRP sanal ağ geçidi",
+      "members": "Üye bağlantılar"
+    },
+    "changesPanel": {
+      "title": "Topoloji değişiklikleri",
+      "since": "Başlangıç",
+      "addedDevices": "Eklenen cihazlar",
+      "removedDevices": "Kaybolan cihazlar",
+      "addedLinks": "Eklenen bağlantılar",
+      "removedLinks": "Kaybolan bağlantılar",
+      "none": "Bu aralıkta değişiklik yok.",
+      "note": "Kaybolan bir bağlantı geri gelirse yalnızca son durumu görünür."
+    },
+    "fit": "Haritayı sığdır"
+  }
+}

@@ -1,0 +1,316 @@
+{
+  "app": {
+    "title": "NetOps",
+    "subtitle": "Campus network management"
+  },
+  "nav": {
+    "main": "Main menu",
+    "map": "Map",
+    "devices": "Devices",
+    "discovery": "Discovery",
+    "alarms": "Alarms",
+    "config": "Config",
+    "soon": "soon",
+    "toggle": "Toggle menu"
+  },
+  "header": {
+    "health": {
+      "ok": "API is up",
+      "degraded": "API degraded",
+      "down": "API unreachable",
+      "checking": "Checking API"
+    },
+    "theme": {
+      "label": "Theme",
+      "light": "Light theme",
+      "dark": "Dark theme",
+      "auto": "System theme"
+    },
+    "language": "Language"
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "none": "—",
+    "all": "All",
+    "clear": "Clear",
+    "close": "Close",
+    "details": "Details",
+    "never": "never",
+    "unknown": "unknown",
+    "error": "Something went wrong",
+    "apiError": "API error",
+    "notFound": "Page not found",
+    "backHome": "Back to the map",
+    "page": "Page"
+  },
+  "enums": {
+    "managementStatus": {
+      "managed": "Managed",
+      "out_of_scope": "Out of scope",
+      "auth_failed": "Authentication failed",
+      "unreachable": "Unreachable",
+      "unsupported_platform": "Unsupported platform",
+      "manual": "Added manually"
+    },
+    "deviceType": {
+      "switch": "Switch",
+      "l3_switch": "L3 switch",
+      "router": "Router",
+      "firewall": "Firewall",
+      "ap": "AP",
+      "wlc": "WLC",
+      "unknown": "Unknown",
+      "subnet": "Subnet"
+    },
+    "role": {
+      "core": "Core",
+      "distribution": "Distribution",
+      "access": "Access",
+      "edge": "Edge",
+      "unknown": "Unknown"
+    },
+    "jobStatus": {
+      "queued": "Queued",
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed"
+    },
+    "itemStatus": {
+      "discovered": "Discovered",
+      "duplicate": "Another address of the same device",
+      "auth_failed": "Authentication failed",
+      "unreachable": "Unreachable",
+      "out_of_scope": "Out of scope",
+      "unsupported_platform": "Unsupported platform",
+      "no_mgmt_ip": "No management address"
+    },
+    "collectionKind": {
+      "facts": "Device facts",
+      "interfaces": "Interfaces",
+      "neighbors": "Neighbours (CDP/LLDP)",
+      "vlans": "VLANs",
+      "mac_table": "MAC table",
+      "arp_table": "ARP table",
+      "routes": "Routing table",
+      "stp": "Spanning tree",
+      "hsrp": "HSRP",
+      "ospf": "OSPF",
+      "config": "Configuration"
+    },
+    "collectionStatus": {
+      "running": "Running",
+      "success": "Succeeded",
+      "partial": "Partial",
+      "failed": "Failed"
+    },
+    "reachability": {
+      "reachable": "Reachable",
+      "unreachable": "Unreachable",
+      "unknown": "Unknown"
+    },
+    "discoverySource": {
+      "seed": "Seed address",
+      "cdp": "CDP",
+      "lldp": "LLDP",
+      "arp": "ARP",
+      "manual": "Manual"
+    }
+  },
+  "devices": {
+    "title": "Devices",
+    "search": "Search",
+    "searchPlaceholder": "Hostname, IP or serial number",
+    "filterType": "Type",
+    "filterRole": "Role",
+    "filterStatus": "Management status",
+    "filterLocation": "Location",
+    "count_one": "{{count}} device",
+    "count_other": "{{count}} devices",
+    "columns": {
+      "hostname": "Hostname",
+      "mgmtIp": "Management IP",
+      "type": "Type",
+      "role": "Role",
+      "status": "Management status",
+      "model": "Model",
+      "serials": "Serial numbers",
+      "lastSeen": "Last seen"
+    },
+    "sortBy": "Sort by {{column}}",
+    "empty": {
+      "title": "No devices yet",
+      "body": "Devices enter the inventory through discovery.",
+      "action": "Start a discovery"
+    },
+    "noMatch": "No devices match the filters."
+  },
+  "device": {
+    "back": "Devices",
+    "facts": "Device facts",
+    "model": "Model",
+    "os": "Operating system",
+    "serials": "Serial numbers",
+    "stackMember": "member {{member}}",
+    "mgmtIp": "Management IP",
+    "type": "Type",
+    "role": "Role",
+    "location": "Location",
+    "status": "Management status",
+    "reachability": "Reachability",
+    "discoveredVia": "Discovered via",
+    "lastPolled": "Last collected",
+    "firstSeen": "First seen",
+    "freshness": {
+      "title": "Data freshness",
+      "kind": "Data",
+      "lastStatus": "Last status",
+      "lastRun": "Last collected",
+      "lastSuccess": "Last successful",
+      "empty": "Nothing has been collected from this device yet."
+    },
+    "refresh": {
+      "button": "Refresh now",
+      "running": "Collecting…",
+      "done": "Data refreshed.",
+      "failed": "Refresh failed: {{error}}",
+      "notManaged": "This device is not managed and cannot be refreshed."
+    },
+    "interfaces": {
+      "title": "Interfaces",
+      "count_one": "{{count}} interface",
+      "count_other": "{{count}} interfaces",
+      "filter": "Find interface",
+      "name": "Interface",
+      "description": "Description",
+      "status": "Status",
+      "speed": "Speed / duplex",
+      "mode": "Mode",
+      "vlans": "VLAN",
+      "channel": "Port-channel",
+      "mac": "MAC",
+      "up": "up",
+      "down": "down",
+      "adminDown": "shutdown",
+      "errDisabled": "err-disabled",
+      "native": "native {{vlan}}",
+      "empty": "No interface data yet."
+    }
+  },
+  "discovery": {
+    "title": "Discovery",
+    "form": {
+      "title": "New discovery",
+      "seeds": "Seed addresses",
+      "seedsHelp": "IP addresses of the devices discovery starts from; separate with Enter, space or comma.",
+      "subnets": "Allowed subnets",
+      "subnetsHelp": "Only devices in these CIDR ranges are connected to; others are recorded but never contacted.",
+      "profiles": "Credential profiles",
+      "profilesHelp": "Tried in order; at most two logins per device so accounts are not locked out.",
+      "noProfiles": "No credential profiles yet. Add one with the CLI: netops credentials add",
+      "submit": "Start discovery"
+    },
+    "validation": {
+      "seedsRequired": "Enter at least one seed address.",
+      "seedInvalid": "Not a valid IP address.",
+      "seedOutsideSubnets": "A seed address is outside the allowed subnets.",
+      "subnetsRequired": "Enter at least one subnet.",
+      "subnetInvalid": "Not a valid CIDR (e.g. 10.0.0.0/16).",
+      "profilesRequired": "Choose at least one credential profile."
+    },
+    "runs": {
+      "title": "Discovery runs",
+      "requested": "Requested",
+      "status": "Status",
+      "found": "Found",
+      "skipped": "Skipped",
+      "errors": "Errors",
+      "duration": "Duration",
+      "empty": "No discovery has run yet.",
+      "open": "Details"
+    },
+    "run": {
+      "title": "Discovery run",
+      "back": "Discovery",
+      "running": "Discovery is running; results update as they come in.",
+      "failed": "Discovery failed: {{error}}",
+      "seeds": "Seed addresses",
+      "subnets": "Allowed subnets",
+      "started": "Started",
+      "finished": "Finished",
+      "progress": {
+        "queued": "Queued",
+        "scanned": "Tried",
+        "found": "Found",
+        "skipped": "Skipped",
+        "errors": "Errors"
+      },
+      "columns": {
+        "address": "Address",
+        "device": "Device",
+        "hop": "Hop",
+        "seenFrom": "Seen from",
+        "attempts": "Logins",
+        "note": "Note"
+      },
+      "newDevice": "new",
+      "noItems": "No addresses yet.",
+      "duplicateNote": "Same chassis as {{device}} (same serial number)",
+      "authFailedNote": "SSH login rejected ({{attempts}} attempts)",
+      "unreachableNote": "Could not connect over SSH"
+    }
+  },
+  "topology": {
+    "title": "Map",
+    "layer": "Layer",
+    "l2": "L2 (physical)",
+    "l3": "L3 (subnets)",
+    "search": "Find device",
+    "searchPlaceholder": "Hostname or IP",
+    "role": "Role",
+    "location": "Location",
+    "at": "Time",
+    "atHelp": "Show the network as it was",
+    "now": "Now",
+    "saveLayout": "Save layout",
+    "autoLayout": "Automatic layout",
+    "layoutSaved": "Layout saved.",
+    "layoutReset": "Back to the automatic layout.",
+    "changes": "Changes",
+    "summary": "{{nodes}} nodes, {{edges}} links",
+    "historic": "Showing the state at {{time}}.",
+    "empty": {
+      "title": "No devices to show",
+      "body": "Run a discovery to see the network on the map.",
+      "filtered": "No devices match the selected filters."
+    },
+    "legend": {
+      "title": "Legend",
+      "managed": "Managed device (solid border)",
+      "outOfScope": "Out of scope (dashed, faded)",
+      "authFailed": "Authentication failed (red, double border)",
+      "unreachable": "Unreachable (orange, dashed)",
+      "unsupported": "Unsupported platform / AP (dotted)",
+      "etherchannel": "EtherChannel (thick line, member count)",
+      "subnet": "Subnet (L3)",
+      "shapes": "Shape: router ◆, L3 switch ■, switch ▬, AP ▲"
+    },
+    "panel": {
+      "title": "Selected node",
+      "openDevice": "Device details",
+      "gateways": "HSRP virtual gateway",
+      "members": "Member links"
+    },
+    "changesPanel": {
+      "title": "Topology changes",
+      "since": "Since",
+      "addedDevices": "Added devices",
+      "removedDevices": "Disappeared devices",
+      "addedLinks": "Added links",
+      "removedLinks": "Disappeared links",
+      "none": "No changes in this period.",
+      "note": "If a link disappears and comes back, only its latest state shows."
+    },
+    "fit": "Fit the map"
+  }
+}
