@@ -24,6 +24,8 @@ x-backend: &backend
     POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in deploy/.env}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
     POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
+    # Encrypts stored device credentials (ADR-0004); the backend refuses to start without it.
+    CREDENTIALS_KEY: ${CREDENTIALS_KEY:?set CREDENTIALS_KEY in deploy/.env (make up generates one)}
     REDIS_URL: redis://redis:6379/0
     CELERY_BROKER_URL: redis://redis:6379/1
     CELERY_RESULT_BACKEND: redis://redis:6379/2

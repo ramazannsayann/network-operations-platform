@@ -4,6 +4,7 @@ import os
 from collections.abc import Iterator
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 # Some netops modules read settings at import time, so these must be set before any
@@ -11,6 +12,8 @@ from fastapi.testclient import TestClient
 os.environ["APP_ENV"] = "test"
 os.environ["POSTGRES_PASSWORD"] = "test-only"  # noqa: S105 - dummy, never used to connect
 os.environ["HEALTH_CHECK_TIMEOUT_SECONDS"] = "0.2"
+# A fresh key per test session: no key material is committed, even for tests.
+os.environ["CREDENTIALS_KEY"] = Fernet.generate_key().decode()
 
 
 @pytest.fixture

@@ -3,22 +3,32 @@
 COMPOSE := docker compose -f deploy/docker-compose.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help install up down logs ps migrate test test-integration lint format openapi mock
+.PHONY: help install env up down logs ps migrate test test-integration lint format openapi mock
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-9s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# Created on first use from the example, with a random database password.
+# A new Fernet key: 32 random bytes, URL-safe base64.
+NEW_FERNET_KEY = $$(openssl rand -base64 32 | tr '+/' '-_')
+
+# Created on first use from the example, with a random database password and a random
+# credentials key; `env` adds the key to files created before it existed.
 deploy/.env:
-	@sed "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$(openssl rand -hex 24)/" deploy/.env.example > $@
-	@echo "Created $@ with a random POSTGRES_PASSWORD."
+	@sed -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$(openssl rand -hex 24)/" \
+	     -e "s/^CREDENTIALS_KEY=.*/CREDENTIALS_KEY=$(NEW_FERNET_KEY)/" deploy/.env.example > $@
+	@echo "Created $@ with a random POSTGRES_PASSWORD and CREDENTIALS_KEY."
+
+env: deploy/.env
+	@grep -q '^CREDENTIALS_KEY=' deploy/.env || { \
+	  echo "CREDENTIALS_KEY=$(NEW_FERNET_KEY)" >> deploy/.env; \
+	  echo "Added a random CREDENTIALS_KEY to deploy/.env; back it up (see ADR-0004)."; }
 
 install: ## Install backend + frontend dependencies and the git pre-commit hooks
 	cd backend && uv sync
 	cd frontend && npm ci
 	uv run --project backend pre-commit install
 
-up: deploy/.env ## Build and start the whole stack in the background
+up: env ## Build and start the whole stack in the background
 	$(COMPOSE) up --build --detach
 
 down: ## Stop the stack (the database volume is kept)
@@ -30,14 +40,14 @@ logs: ## Follow the logs of all services
 ps: ## Show service status and health
 	$(COMPOSE) ps
 
-migrate: deploy/.env ## Apply database migrations (alembic upgrade head); `make up` also does this
+migrate: env ## Apply database migrations (alembic upgrade head); `make up` also does this
 	$(COMPOSE) run --rm migrate
 
 test: ## Run the backend unit tests (no database or network needed)
 	cd backend && uv run pytest
 
 # Credentials come from deploy/.env; the tests create their own netops_test database.
-test-integration: deploy/.env ## Run integration tests against the compose db (needs `make up`)
+test-integration: env ## Run integration tests against the compose db (needs `make up`)
 	set -a && . ./deploy/.env && set +a && cd backend && \
 	TEST_POSTGRES_PORT="$${DB_HOST_PORT:-5433}" TEST_POSTGRES_USER="$$POSTGRES_USER" \
 	TEST_POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" uv run pytest -m integration

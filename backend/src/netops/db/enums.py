@@ -241,6 +241,32 @@ class ChangeOrigin(StrEnum):
     EXTERNAL = "external"
 
 
+# --- Credentials (minimal M7) -------------------------------------------------------------
+
+
+class CredentialKind(StrEnum):
+    SSH = "ssh"
+    SNMPV3 = "snmpv3"
+
+
+class SnmpAuthProtocol(StrEnum):
+    """SNMPv3 authentication; MD5 is deliberately not offered."""
+
+    SHA = "sha"
+    SHA224 = "sha224"
+    SHA256 = "sha256"
+    SHA384 = "sha384"
+    SHA512 = "sha512"
+
+
+class SnmpPrivProtocol(StrEnum):
+    """SNMPv3 privacy (encryption); DES and 3DES are deliberately not offered."""
+
+    AES128 = "aes128"
+    AES192 = "aes192"
+    AES256 = "aes256"
+
+
 ALL_ENUMS: tuple[type[StrEnum], ...] = (
     DeviceType,
     DeviceRole,
@@ -268,6 +294,9 @@ ALL_ENUMS: tuple[type[StrEnum], ...] = (
     IncidentState,
     ConfigTrigger,
     ChangeOrigin,
+    CredentialKind,
+    SnmpAuthProtocol,
+    SnmpPrivProtocol,
 )
 
 
