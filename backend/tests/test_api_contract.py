@@ -78,6 +78,7 @@ IMPLEMENTED_OPERATIONS = {
     ("GET", "/api/v1/topology/layout"),
     ("PUT", "/api/v1/topology/layout"),
     ("GET", "/api/v1/credential-profiles"),
+    ("GET", "/api/v1/locations"),
 }
 
 SOME_ID = "5e0c7a1d-0000-4000-8000-000000002004"

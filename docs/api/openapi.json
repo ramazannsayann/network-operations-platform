@@ -2393,6 +2393,29 @@
                     }
                   ],
                   "id": "5e0c7a1d-0000-4000-8000-000000007101",
+                  "items": [
+                    {
+                      "address": "10.0.0.23",
+                      "attempts": 1,
+                      "device": {
+                        "hostname": "sw-b2-03",
+                        "id": "5e0c7a1d-0000-4000-8000-000000002004",
+                        "mgmt_ip": "10.0.0.23"
+                      },
+                      "hop": 2,
+                      "is_new": false,
+                      "local_interface": "GigabitEthernet1/0/3",
+                      "neighbor_name": "sw-b2-03.campus.example.net",
+                      "occurred_at": "2026-10-09T08:01:12Z",
+                      "platform": "cisco WS-C2960X-48FPD-L",
+                      "seen_from": {
+                        "hostname": "dist-sw-b",
+                        "id": "5e0c7a1d-0000-4000-8000-000000002003",
+                        "mgmt_ip": "10.0.0.11"
+                      },
+                      "status": "discovered"
+                    }
+                  ],
                   "job_id": "5e0c7a1d-0000-4000-8000-000000007002",
                   "progress": {
                     "errors": 1,
@@ -8550,6 +8573,20 @@
           }
         ]
       },
+      "DiscoveryItemStatus": {
+        "type": "string",
+        "enum": [
+          "discovered",
+          "duplicate",
+          "auth_failed",
+          "unreachable",
+          "out_of_scope",
+          "unsupported_platform",
+          "no_mgmt_ip"
+        ],
+        "title": "DiscoveryItemStatus",
+        "description": "Outcome for one address (or address-less neighbour) in a discovery run."
+      },
       "DiscoveryProgress": {
         "properties": {
           "queued": {
@@ -8669,6 +8706,14 @@
             },
             "type": "array",
             "title": "Errors"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryRunItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Every address the run dealt with, in BFS order, with its outcome."
           }
         },
         "type": "object",
@@ -8683,7 +8728,8 @@
           "request",
           "found_devices",
           "skipped_neighbors",
-          "errors"
+          "errors",
+          "items"
         ],
         "title": "DiscoveryRun",
         "examples": [
@@ -8716,6 +8762,29 @@
               }
             ],
             "id": "5e0c7a1d-0000-4000-8000-000000007101",
+            "items": [
+              {
+                "address": "10.0.0.23",
+                "attempts": 1,
+                "device": {
+                  "hostname": "sw-b2-03",
+                  "id": "5e0c7a1d-0000-4000-8000-000000002004",
+                  "mgmt_ip": "10.0.0.23"
+                },
+                "hop": 2,
+                "is_new": false,
+                "local_interface": "GigabitEthernet1/0/3",
+                "neighbor_name": "sw-b2-03.campus.example.net",
+                "occurred_at": "2026-10-09T08:01:12Z",
+                "platform": "cisco WS-C2960X-48FPD-L",
+                "seen_from": {
+                  "hostname": "dist-sw-b",
+                  "id": "5e0c7a1d-0000-4000-8000-000000002003",
+                  "mgmt_ip": "10.0.0.11"
+                },
+                "status": "discovered"
+              }
+            ],
             "job_id": "5e0c7a1d-0000-4000-8000-000000007002",
             "progress": {
               "errors": 1,
@@ -8806,6 +8875,154 @@
             "seeds": [
               "10.0.0.1"
             ]
+          }
+        ]
+      },
+      "DiscoveryRunItem": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "ipvanyaddress"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "hop": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Hop",
+            "description": "BFS level: 0 for seeds."
+          },
+          "status": {
+            "$ref": "#/components/schemas/DiscoveryItemStatus"
+          },
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The device found, the one a duplicate address belongs to, or the placeholder recorded for a skipped or failed address."
+          },
+          "seen_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The device whose CDP/LLDP pointed here."
+          },
+          "local_interface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Interface",
+            "description": "Its interface towards this neighbour."
+          },
+          "neighbor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighbor Name"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "attempts": {
+            "type": "integer",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Attempts",
+            "description": "Logins tried (at most two)."
+          },
+          "is_new": {
+            "type": "boolean",
+            "title": "Is New"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "address",
+          "hop",
+          "status",
+          "device",
+          "seen_from",
+          "local_interface",
+          "neighbor_name",
+          "platform",
+          "attempts",
+          "is_new",
+          "error",
+          "occurred_at"
+        ],
+        "title": "DiscoveryRunItem",
+        "description": "What the run did with one address (or address-less neighbour).",
+        "examples": [
+          {
+            "address": "10.0.0.23",
+            "attempts": 1,
+            "device": {
+              "hostname": "sw-b2-03",
+              "id": "5e0c7a1d-0000-4000-8000-000000002004",
+              "mgmt_ip": "10.0.0.23"
+            },
+            "hop": 2,
+            "is_new": false,
+            "local_interface": "GigabitEthernet1/0/3",
+            "neighbor_name": "sw-b2-03.campus.example.net",
+            "occurred_at": "2026-10-09T08:01:12Z",
+            "platform": "cisco WS-C2960X-48FPD-L",
+            "seen_from": {
+              "hostname": "dist-sw-b",
+              "id": "5e0c7a1d-0000-4000-8000-000000002003",
+              "mgmt_ip": "10.0.0.11"
+            },
+            "status": "discovered"
           }
         ]
       },
