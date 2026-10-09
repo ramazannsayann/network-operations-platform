@@ -59,6 +59,21 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
 - Match interfaces on `name_normalized` from `netops.core.ifname.normalize`.
 - Retention periods and chunk size live only in `netops/db/timescale.py`.
 
+## API
+
+- Contract: `docs/api/openapi.json`, generated from the routers in `netops/api/v1/` and the
+  Pydantic schemas in `netops/api/schemas/`. Conventions: [ADR-0003](docs/adr/0003-api-conventions.md)
+  (`/api/v1`, problem+json errors, `{items,total,limit,offset}` lists, 202 + jobs, `at` for
+  time travel, enums reused from `netops.db.enums`, bearer auth declared on every endpoint
+  except health and login). WebSocket: `docs/api/websocket.md`.
+- Unimplemented endpoints raise `not_implemented()` (501 problem). When implementing one,
+  keep the contract; any contract change is reviewed as a diff of `openapi.json`.
+- Every schema needs a realistic example from `netops/api/schemas/examples.py`
+  (private/documentation addresses only).
+- After any change under `netops/api/`, run `make openapi` and commit `docs/api/openapi.json`
+  and `frontend/src/api/schema.d.ts`; never edit them by hand.
+- Frontend code calls the API only through the typed client in `frontend/src/api/client.ts`.
+
 ## Repository layout
 
 - `backend/`: Python 3.12 package `netops` (src layout), managed with uv; tests in `backend/tests/`
@@ -81,6 +96,8 @@ make test       # backend unit tests (no database or network)
 make test-integration  # integration tests against the compose db (needs `make up`)
 make lint       # ruff, ruff format --check, mypy --strict, eslint, prettier, tsc
 make format     # auto-fix formatting
+make openapi    # regenerate docs/api/openapi.json and frontend/src/api/schema.d.ts
+make mock       # Prism mock server for the contract on :4010 (UI: cd frontend && npm run dev:mock)
 ```
 
 Backend only (in `backend/`): `uv run pytest`, `uv run ruff check .`, `uv run mypy`,

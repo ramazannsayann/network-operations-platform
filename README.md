@@ -59,6 +59,33 @@ cd frontend && npm run dev
 
 New migration: `cd backend && uv run alembic revision --autogenerate -m "add devices table"`.
 
+## API contract and mock server
+
+The REST API is defined contract-first: [docs/api/openapi.json](docs/api/openapi.json)
+(browsable at <http://localhost:8080/api/docs> when the stack runs), conventions in
+[ADR-0003](docs/adr/0003-api-conventions.md), live updates in
+[docs/api/websocket.md](docs/api/websocket.md). Most endpoints still answer
+`501 Not Implemented`.
+
+After changing schemas or routers in `backend/src/netops/api/`, regenerate and commit the
+document and the frontend types (CI fails if they are stale):
+
+```bash
+make openapi    # docs/api/openapi.json + frontend/src/api/schema.d.ts
+```
+
+To build UI screens before the backend implements them, run the frontend against a mock
+server that answers every endpoint with the contract's example data (two terminals):
+
+```bash
+cd frontend && npm run mock       # Prism on http://127.0.0.1:4010
+cd frontend && npm run dev:mock   # UI on http://localhost:5173, /api proxied to the mock
+```
+
+The mock enforces the declared security: send any `Authorization: Bearer <token>` header
+(tokens are not checked yet). Other responses can be requested with a `Prefer` header,
+e.g. `Prefer: code=404` or `Prefer: example=not_found` on `/api/v1/hosts/locate`.
+
 ## Repository layout
 
 ```

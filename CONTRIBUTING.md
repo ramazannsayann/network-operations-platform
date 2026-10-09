@@ -22,12 +22,16 @@ make up         # run the stack locally: http://localhost:8080
 2. **One pull request per logical change.** Small PRs get reviewed faster; split unrelated
    work into separate PRs.
 3. **CI must pass** (backend lint/types/tests, backend integration, frontend, Docker build)
-   and **one teammate must approve** before merging. `main` is protected: nobody pushes to it
-   directly.
+   and **a teammate reviews** before merging. `main` is protected: nobody pushes to it
+   directly. (Until the other members have joined the repository, GitHub requires 0
+   approvals; it goes back to 1 approval then.)
 4. **Squash merge.** The PR title becomes the commit message on `main`, so write it in
    English, in the imperative mood, ≤ 72 characters: "Add CDP neighbour parser".
 5. Significant design decisions get a new ADR in `docs/adr/` in the same PR. Schema changes
    come with an Alembic migration (see CLAUDE.md) and an update to `docs/data-model.md`.
+6. API changes: edit the schemas/routers in `backend/src/netops/api/`, run `make openapi`
+   and commit the regenerated `docs/api/openapi.json` and `frontend/src/api/schema.d.ts`.
+   Reviewers read the `openapi.json` diff as the contract change (ADR-0003).
 
 ## Checks to run before pushing
 
@@ -35,6 +39,7 @@ make up         # run the stack locally: http://localhost:8080
 make lint               # ruff, ruff format --check, mypy --strict, eslint, prettier, tsc
 make test               # backend unit tests (no database or network)
 make test-integration   # schema and query tests against the local database (needs `make up`)
+make openapi            # after API changes: regenerate the contract and the frontend types
 uv run --project backend pre-commit run --all-files   # what the git hook runs on commit
 ```
 
