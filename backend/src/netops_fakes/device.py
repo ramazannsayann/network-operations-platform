@@ -15,6 +15,7 @@ one thread, not 200.
 """
 
 import asyncio
+import contextlib
 import secrets
 import threading
 from collections.abc import Coroutine, Iterable, Mapping
@@ -49,6 +50,7 @@ class FakeCiscoDevice:
     sessions: int = 0
     failed_logins: int = 0
     _server: asyncssh.SSHAcceptor | None = field(default=None, repr=False)
+    _connections: set[asyncssh.SSHServerConnection] = field(default_factory=set, repr=False)
     _loop: "_LoopThread | None" = field(default=None, repr=False)
 
     def __repr__(self) -> str:
@@ -70,6 +72,13 @@ class FakeCiscoDevice:
         device = self
 
         class Server(asyncssh.SSHServer):
+            def connection_made(self, conn: asyncssh.SSHServerConnection) -> None:
+                self._conn = conn
+                device._connections.add(conn)
+
+            def connection_lost(self, exc: Exception | None) -> None:
+                device._connections.discard(self._conn)
+
             def begin_auth(self, username: str) -> bool:
                 return True
 
@@ -96,7 +105,11 @@ class FakeCiscoDevice:
     async def close(self) -> None:
         if self._server is not None:
             self._server.close()
-            await self._server.wait_closed()
+            # Since Python 3.12 wait_closed() also waits for open client connections.
+            for conn in list(self._connections):
+                conn.abort()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._server.wait_closed(), timeout=5)
             self._server = None
 
     async def _shell(self, process: asyncssh.SSHServerProcess) -> None:  # type: ignore[type-arg]

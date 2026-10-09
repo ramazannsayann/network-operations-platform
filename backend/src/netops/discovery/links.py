@@ -198,5 +198,5 @@ async def rebuild_links(session: AsyncSession) -> LinkChanges:
             link.is_active = False
             changes.deactivated += 1
     await session.commit()
-    logger.info("links rebuilt", extra=vars(changes))
+    logger.info("links rebuilt", extra={"links": vars(changes)})
     return changes

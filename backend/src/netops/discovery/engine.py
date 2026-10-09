@@ -248,7 +248,11 @@ class Discovery:
             await job_finished(session, run.job_id, error)
             logger.info(
                 "discovery run finished",
-                extra={"run_id": str(self.run_id), "status": status.value, **vars(self.counters)},
+                extra={
+                    "run_id": str(self.run_id),
+                    "status": status.value,
+                    "counters": vars(self.counters),
+                },
             )
             return status
 
