@@ -76,7 +76,7 @@ plugins = ["pydantic.mypy"]
 
 # Libraries without type information; their results are typed where netops uses them.
 [[tool.mypy.overrides]]
-module = ["textfsm", "ntc_templates.*", "nornir_netmiko.*"]
+module = ["textfsm", "ntc_templates.*", "nornir_netmiko.*", "paramiko.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]
