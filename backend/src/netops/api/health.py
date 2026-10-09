@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Literal
 
 from fastapi import APIRouter, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from netops import __version__
 from netops.core.redis import ping_redis
@@ -25,6 +25,15 @@ class ComponentStatus(StrEnum):
 
 
 class HealthResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"status": "ok", "version": "0.1.0", "db": "ok", "redis": "ok"},
+                {"status": "degraded", "version": "0.1.0", "db": "ok", "redis": "error"},
+            ]
+        }
+    )
+
     status: Literal["ok", "degraded"]
     version: str
     db: ComponentStatus

@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from netops import __version__
-from netops.api.router import api_router
+from netops.api.app import build_api
 from netops.core.logging import configure_logging
 from netops.core.redis import close_redis
 from netops.core.settings import get_settings
@@ -29,16 +29,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
 
-    app = FastAPI(
-        title="NetOps Platform API",
-        version=__version__,
-        docs_url="/api/docs",
-        redoc_url="/api/redoc",
-        openapi_url="/api/openapi.json",
-        lifespan=lifespan,
-    )
-    app.include_router(api_router, prefix="/api")
-    return app
+    return build_api(lifespan=lifespan)
 
 
 app = create_app()
