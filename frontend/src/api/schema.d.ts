@@ -269,8 +269,8 @@ export interface paths {
          * @description The topology graph at ``at``.
          *
          *     L2: devices and physical links; EtherChannel members are collapsed into one edge with a
-         *     ``members`` list. L3: devices and the subnets their interfaces are in. Unmanaged and
-         *     out-of-scope neighbours are included and flagged.
+         *     ``members`` list. L3: devices and the subnets their interfaces are in, with HSRP
+         *     gateways. Unmanaged and out-of-scope neighbours are included and flagged.
          */
         get: operations["get_topology"];
         put?: never;
@@ -291,9 +291,39 @@ export interface paths {
         /**
          * Get Topology Changes
          * @description Devices and links that appeared or disappeared between ``since`` and ``until``.
+         *
+         *     Added: first seen in the window. Removed: no longer seen by discovery, dated at the
+         *     first successful discovery run after they were last seen (drift is detected by
+         *     discovery runs). A link or device that disappears and comes back keeps one row, so only
+         *     its latest state shows (see ADR-0005).
          */
         get: operations["get_topology_changes"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/topology/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Topology Layout
+         * @description Saved node positions of a map (one layout for everyone until M7 adds users).
+         */
+        get: operations["get_topology_layout"];
+        /**
+         * Put Topology Layout
+         * @description Replace the saved positions of a map; an empty list returns it to the automatic
+         *     layout. Node ids are device ids, or subnet prefixes on the L3 map.
+         */
+        put: operations["put_topology_layout"];
         post?: never;
         delete?: never;
         options?: never;
@@ -618,6 +648,28 @@ export interface paths {
         };
         /** Get Job */
         get: operations["get_job"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/credential-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Credential Profiles
+         * @description Profiles by name, e.g. to choose the ones a discovery run tries. Only id, name and
+         *     kind: usernames and secrets stay in the database (add profiles with ``netops
+         *     credentials add``).
+         */
+        get: operations["list_credential_profiles"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1124,6 +1176,63 @@ export interface components {
          */
         Connection: "wired" | "wireless";
         /**
+         * CredentialKind
+         * @enum {string}
+         */
+        CredentialKind: "ssh" | "snmpv3";
+        /**
+         * CredentialProfilePage
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "5e0c7a1d-0000-4000-8000-000000008001",
+         *           "kind": "ssh",
+         *           "name": "campus-ro"
+         *         },
+         *         {
+         *           "id": "5e0c7a1d-0000-4000-8000-000000008002",
+         *           "kind": "ssh",
+         *           "name": "campus-ro-2025"
+         *         }
+         *       ],
+         *       "limit": 50,
+         *       "offset": 0,
+         *       "total": 2
+         *     }
+         */
+        CredentialProfilePage: {
+            /** Items */
+            items: components["schemas"]["CredentialProfileSummary"][];
+            /**
+             * Total
+             * @description Number of items matching the filters, all pages.
+             */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * CredentialProfileSummary
+         * @description A credential profile as the UI lists it. Secrets are never part of any response.
+         * @example {
+         *       "id": "5e0c7a1d-0000-4000-8000-000000008001",
+         *       "kind": "ssh",
+         *       "name": "campus-ro"
+         *     }
+         */
+        CredentialProfileSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            kind: components["schemas"]["CredentialKind"];
+        };
+        /**
          * CurrentUser
          * @example {
          *       "display_name": "NOC Operator 1",
@@ -1525,6 +1634,12 @@ export interface components {
             occurred_at: string;
         };
         /**
+         * DiscoveryItemStatus
+         * @description Outcome for one address (or address-less neighbour) in a discovery run.
+         * @enum {string}
+         */
+        DiscoveryItemStatus: "discovered" | "duplicate" | "auth_failed" | "unreachable" | "out_of_scope" | "unsupported_platform" | "no_mgmt_ip";
+        /**
          * DiscoveryProgress
          * @example {
          *       "errors": 1,
@@ -1583,6 +1698,29 @@ export interface components {
          *         }
          *       ],
          *       "id": "5e0c7a1d-0000-4000-8000-000000007101",
+         *       "items": [
+         *         {
+         *           "address": "10.0.0.23",
+         *           "attempts": 1,
+         *           "device": {
+         *             "hostname": "sw-b2-03",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000002004",
+         *             "mgmt_ip": "10.0.0.23"
+         *           },
+         *           "hop": 2,
+         *           "is_new": false,
+         *           "local_interface": "GigabitEthernet1/0/3",
+         *           "neighbor_name": "sw-b2-03.campus.example.net",
+         *           "occurred_at": "2026-10-09T08:01:12Z",
+         *           "platform": "cisco WS-C2960X-48FPD-L",
+         *           "seen_from": {
+         *             "hostname": "dist-sw-b",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *             "mgmt_ip": "10.0.0.11"
+         *           },
+         *           "status": "discovered"
+         *         }
+         *       ],
          *       "job_id": "5e0c7a1d-0000-4000-8000-000000007002",
          *       "progress": {
          *         "errors": 1,
@@ -1650,6 +1788,11 @@ export interface components {
             skipped_neighbors: components["schemas"]["SkippedNeighbor"][];
             /** Errors */
             errors: components["schemas"]["DiscoveryError"][];
+            /**
+             * Items
+             * @description Every address the run dealt with, in BFS order, with its outcome.
+             */
+            items: components["schemas"]["DiscoveryRunItem"][];
         };
         /**
          * DiscoveryRunCreate
@@ -1681,6 +1824,68 @@ export interface components {
              * @description SSH credential profiles to try, in order. At most two logins per device: the profile that worked on it before first, then these.
              */
             credential_profile_ids: string[];
+        };
+        /**
+         * DiscoveryRunItem
+         * @description What the run did with one address (or address-less neighbour).
+         * @example {
+         *       "address": "10.0.0.23",
+         *       "attempts": 1,
+         *       "device": {
+         *         "hostname": "sw-b2-03",
+         *         "id": "5e0c7a1d-0000-4000-8000-000000002004",
+         *         "mgmt_ip": "10.0.0.23"
+         *       },
+         *       "hop": 2,
+         *       "is_new": false,
+         *       "local_interface": "GigabitEthernet1/0/3",
+         *       "neighbor_name": "sw-b2-03.campus.example.net",
+         *       "occurred_at": "2026-10-09T08:01:12Z",
+         *       "platform": "cisco WS-C2960X-48FPD-L",
+         *       "seen_from": {
+         *         "hostname": "dist-sw-b",
+         *         "id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *         "mgmt_ip": "10.0.0.11"
+         *       },
+         *       "status": "discovered"
+         *     }
+         */
+        DiscoveryRunItem: {
+            /** Address */
+            address: string | null;
+            /**
+             * Hop
+             * @description BFS level: 0 for seeds.
+             */
+            hop: number;
+            status: components["schemas"]["DiscoveryItemStatus"];
+            /** @description The device found, the one a duplicate address belongs to, or the placeholder recorded for a skipped or failed address. */
+            device: components["schemas"]["DeviceRef"] | null;
+            /** @description The device whose CDP/LLDP pointed here. */
+            seen_from: components["schemas"]["DeviceRef"] | null;
+            /**
+             * Local Interface
+             * @description Its interface towards this neighbour.
+             */
+            local_interface: string | null;
+            /** Neighbor Name */
+            neighbor_name: string | null;
+            /** Platform */
+            platform: string | null;
+            /**
+             * Attempts
+             * @description Logins tried (at most two).
+             */
+            attempts: number;
+            /** Is New */
+            is_new: boolean;
+            /** Error */
+            error: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
         };
         /**
          * DiscoveryRunPage
@@ -3607,6 +3812,25 @@ export interface components {
          */
         NodeKind: "device" | "subnet";
         /**
+         * NodePosition
+         * @example {
+         *       "node_id": "5e0c7a1d-0000-4000-8000-000000002001",
+         *       "x": 420,
+         *       "y": 80
+         *     }
+         */
+        NodePosition: {
+            /**
+             * Node Id
+             * @description A device id, or a subnet prefix (L3).
+             */
+            node_id: string;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /**
          * NotFoundReason
          * @enum {string}
          */
@@ -4066,11 +4290,16 @@ export interface components {
          *         {
          *           "device_id": "5e0c7a1d-0000-4000-8000-000000002001",
          *           "device_type": "l3_switch",
+         *           "gateway_ips": [],
          *           "id": "5e0c7a1d-0000-4000-8000-000000002001",
          *           "is_managed": true,
          *           "kind": "device",
          *           "label": "core-sw-1",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001001",
+         *           "management_status": "managed",
+         *           "mgmt_ip": "10.0.0.1",
+         *           "model": "C9500-24Y4C",
+         *           "open_alarm_count": 0,
          *           "out_of_scope": false,
          *           "reachability": "reachable",
          *           "role": "core"
@@ -4078,11 +4307,16 @@ export interface components {
          *         {
          *           "device_id": "5e0c7a1d-0000-4000-8000-000000002003",
          *           "device_type": "l3_switch",
+         *           "gateway_ips": [],
          *           "id": "5e0c7a1d-0000-4000-8000-000000002003",
          *           "is_managed": true,
          *           "kind": "device",
          *           "label": "dist-sw-b",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001002",
+         *           "management_status": "managed",
+         *           "mgmt_ip": "10.0.0.11",
+         *           "model": "C9300-24T",
+         *           "open_alarm_count": 0,
          *           "out_of_scope": false,
          *           "reachability": "reachable",
          *           "role": "distribution"
@@ -4090,11 +4324,16 @@ export interface components {
          *         {
          *           "device_id": "5e0c7a1d-0000-4000-8000-000000002004",
          *           "device_type": "switch",
+         *           "gateway_ips": [],
          *           "id": "5e0c7a1d-0000-4000-8000-000000002004",
          *           "is_managed": true,
          *           "kind": "device",
          *           "label": "sw-b2-03",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
+         *           "management_status": "managed",
+         *           "mgmt_ip": "10.0.0.23",
+         *           "model": "WS-C2960X-48FPD-L",
+         *           "open_alarm_count": 1,
          *           "out_of_scope": false,
          *           "reachability": "reachable",
          *           "role": "access"
@@ -4102,24 +4341,87 @@ export interface components {
          *         {
          *           "device_id": "5e0c7a1d-0000-4000-8000-000000002006",
          *           "device_type": "ap",
+         *           "gateway_ips": [],
          *           "id": "5e0c7a1d-0000-4000-8000-000000002006",
          *           "is_managed": false,
          *           "kind": "device",
          *           "label": "ap-b2-01",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
+         *           "management_status": "unsupported_platform",
+         *           "mgmt_ip": "10.0.30.41",
+         *           "model": "AIR-AP2802I-E-K9",
+         *           "open_alarm_count": 0,
          *           "out_of_scope": false,
          *           "reachability": "unknown",
-         *           "role": "access"
+         *           "role": "unknown"
          *         },
          *         {
+         *           "device_id": "5e0c7a1d-0000-4000-8000-000000002007",
          *           "device_type": "router",
-         *           "id": "neighbor:198.51.100.1",
+         *           "gateway_ips": [],
+         *           "id": "5e0c7a1d-0000-4000-8000-000000002007",
          *           "is_managed": false,
          *           "kind": "device",
          *           "label": "isp-ce-1",
+         *           "management_status": "out_of_scope",
+         *           "mgmt_ip": "198.51.100.1",
+         *           "model": "ISR4331/K9",
+         *           "open_alarm_count": 0,
          *           "out_of_scope": true,
          *           "reachability": "unknown",
-         *           "role": "edge"
+         *           "role": "unknown"
+         *         }
+         *       ]
+         *     }
+         * @example {
+         *       "at": "2026-10-09T08:00:00Z",
+         *       "edges": [
+         *         {
+         *           "address": "10.0.20.2/24",
+         *           "hsrp_state": "active",
+         *           "id": "member:5e0c7a1d-0000-4000-8000-000000003204:10.0.20.0/24",
+         *           "is_active": true,
+         *           "kind": "subnet_member",
+         *           "members": [],
+         *           "source": "5e0c7a1d-0000-4000-8000-000000002001",
+         *           "source_interface": {
+         *             "device_id": "5e0c7a1d-0000-4000-8000-000000002001",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000003204",
+         *             "name": "Vlan20"
+         *           },
+         *           "target": "10.0.20.0/24"
+         *         }
+         *       ],
+         *       "layer": "l3",
+         *       "nodes": [
+         *         {
+         *           "device_id": "5e0c7a1d-0000-4000-8000-000000002001",
+         *           "device_type": "l3_switch",
+         *           "gateway_ips": [],
+         *           "id": "5e0c7a1d-0000-4000-8000-000000002001",
+         *           "is_managed": true,
+         *           "kind": "device",
+         *           "label": "core-sw-1",
+         *           "location_id": "5e0c7a1d-0000-4000-8000-000000001001",
+         *           "management_status": "managed",
+         *           "mgmt_ip": "10.0.0.1",
+         *           "model": "C9500-24Y4C",
+         *           "open_alarm_count": 0,
+         *           "out_of_scope": false,
+         *           "reachability": "reachable",
+         *           "role": "core"
+         *         },
+         *         {
+         *           "gateway_ips": [
+         *             "10.0.20.1"
+         *           ],
+         *           "id": "10.0.20.0/24",
+         *           "is_managed": false,
+         *           "kind": "subnet",
+         *           "label": "10.0.20.0/24",
+         *           "open_alarm_count": 0,
+         *           "out_of_scope": false,
+         *           "prefix": "10.0.20.0/24"
          *         }
          *       ]
          *     }
@@ -4278,6 +4580,21 @@ export interface components {
          *         "name": "Gi1/0/49"
          *       }
          *     }
+         * @example {
+         *       "address": "10.0.20.2/24",
+         *       "hsrp_state": "active",
+         *       "id": "member:5e0c7a1d-0000-4000-8000-000000003204:10.0.20.0/24",
+         *       "is_active": true,
+         *       "kind": "subnet_member",
+         *       "members": [],
+         *       "source": "5e0c7a1d-0000-4000-8000-000000002001",
+         *       "source_interface": {
+         *         "device_id": "5e0c7a1d-0000-4000-8000-000000002001",
+         *         "id": "5e0c7a1d-0000-4000-8000-000000003204",
+         *         "name": "Vlan20"
+         *       },
+         *       "target": "10.0.20.0/24"
+         *     }
          */
         TopologyEdge: {
             /** Id */
@@ -4308,6 +4625,13 @@ export interface components {
              * @description The links row, for single-link edges.
              */
             link_id: string | null;
+            /**
+             * Address
+             * @description L3: the device's address (with prefix length) in the subnet.
+             */
+            address: string | null;
+            /** @description L3: the device's HSRP state in the subnet; 'active' marks the router that currently answers for the gateway address. */
+            hsrp_state: components["schemas"]["HsrpState"] | null;
         };
         /**
          * TopologyLayer
@@ -4315,34 +4639,110 @@ export interface components {
          */
         TopologyLayer: "l2" | "l3";
         /**
+         * TopologyLayout
+         * @example {
+         *       "layer": "l2",
+         *       "positions": [
+         *         {
+         *           "node_id": "5e0c7a1d-0000-4000-8000-000000002001",
+         *           "x": 420,
+         *           "y": 80
+         *         },
+         *         {
+         *           "node_id": "5e0c7a1d-0000-4000-8000-000000002004",
+         *           "x": 300,
+         *           "y": 320
+         *         }
+         *       ],
+         *       "updated_at": "2026-10-09T07:55:00Z"
+         *     }
+         */
+        TopologyLayout: {
+            layer: components["schemas"]["TopologyLayer"];
+            /** Positions */
+            positions: components["schemas"]["NodePosition"][];
+            /**
+             * Updated At
+             * @description NULL if never saved.
+             */
+            updated_at: string | null;
+        };
+        /**
+         * TopologyLayoutUpdate
+         * @example {
+         *       "positions": [
+         *         {
+         *           "node_id": "5e0c7a1d-0000-4000-8000-000000002001",
+         *           "x": 420,
+         *           "y": 80
+         *         },
+         *         {
+         *           "node_id": "5e0c7a1d-0000-4000-8000-000000002004",
+         *           "x": 300,
+         *           "y": 320
+         *         }
+         *       ]
+         *     }
+         */
+        TopologyLayoutUpdate: {
+            /**
+             * Positions
+             * @description Replaces the saved positions of the layer; an empty list resets it to the automatic layout.
+             */
+            positions: components["schemas"]["NodePosition"][];
+        };
+        /**
          * TopologyNode
          * @example {
          *       "device_id": "5e0c7a1d-0000-4000-8000-000000002004",
          *       "device_type": "switch",
+         *       "gateway_ips": [],
          *       "id": "5e0c7a1d-0000-4000-8000-000000002004",
          *       "is_managed": true,
          *       "kind": "device",
          *       "label": "sw-b2-03",
          *       "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
+         *       "management_status": "managed",
+         *       "mgmt_ip": "10.0.0.23",
+         *       "model": "WS-C2960X-48FPD-L",
+         *       "open_alarm_count": 1,
          *       "out_of_scope": false,
          *       "reachability": "reachable",
          *       "role": "access"
          *     }
          * @example {
+         *       "device_id": "5e0c7a1d-0000-4000-8000-000000002007",
          *       "device_type": "router",
-         *       "id": "neighbor:198.51.100.1",
+         *       "gateway_ips": [],
+         *       "id": "5e0c7a1d-0000-4000-8000-000000002007",
          *       "is_managed": false,
          *       "kind": "device",
          *       "label": "isp-ce-1",
+         *       "management_status": "out_of_scope",
+         *       "mgmt_ip": "198.51.100.1",
+         *       "model": "ISR4331/K9",
+         *       "open_alarm_count": 0,
          *       "out_of_scope": true,
          *       "reachability": "unknown",
-         *       "role": "edge"
+         *       "role": "unknown"
+         *     }
+         * @example {
+         *       "gateway_ips": [
+         *         "10.0.20.1"
+         *       ],
+         *       "id": "10.0.20.0/24",
+         *       "is_managed": false,
+         *       "kind": "subnet",
+         *       "label": "10.0.20.0/24",
+         *       "open_alarm_count": 0,
+         *       "out_of_scope": false,
+         *       "prefix": "10.0.20.0/24"
          *     }
          */
         TopologyNode: {
             /**
              * Id
-             * @description Device id, subnet prefix, or a synthetic id for neighbours.
+             * @description The device id, or the prefix of a subnet node (L3).
              */
             id: string;
             kind: components["schemas"]["NodeKind"];
@@ -4357,16 +4757,32 @@ export interface components {
             reachability: components["schemas"]["Reachability"] | null;
             /** Is Managed */
             is_managed: boolean;
+            /** @description Why the device is (not) managed; NULL for subnet nodes. */
+            management_status: components["schemas"]["ManagementStatus"] | null;
             /**
              * Out Of Scope
              * @description Seen as a neighbour outside the allowed subnets.
              */
             out_of_scope: boolean;
+            /** Mgmt Ip */
+            mgmt_ip: string | null;
+            /** Model */
+            model: string | null;
+            /**
+             * Open Alarm Count
+             * @description Open alarms (always 0 until M3).
+             */
+            open_alarm_count: number;
             /**
              * Prefix
              * @description For subnet nodes (L3).
              */
             prefix: string | null;
+            /**
+             * Gateway Ips
+             * @description HSRP virtual gateway addresses in the subnet (L3 subnet nodes).
+             */
+            gateway_ips: string[];
         };
         /**
          * UserRole
@@ -6318,6 +6734,29 @@ export interface operations {
                      *         }
                      *       ],
                      *       "id": "5e0c7a1d-0000-4000-8000-000000007101",
+                     *       "items": [
+                     *         {
+                     *           "address": "10.0.0.23",
+                     *           "attempts": 1,
+                     *           "device": {
+                     *             "hostname": "sw-b2-03",
+                     *             "id": "5e0c7a1d-0000-4000-8000-000000002004",
+                     *             "mgmt_ip": "10.0.0.23"
+                     *           },
+                     *           "hop": 2,
+                     *           "is_new": false,
+                     *           "local_interface": "GigabitEthernet1/0/3",
+                     *           "neighbor_name": "sw-b2-03.campus.example.net",
+                     *           "occurred_at": "2026-10-09T08:01:12Z",
+                     *           "platform": "cisco WS-C2960X-48FPD-L",
+                     *           "seen_from": {
+                     *             "hostname": "dist-sw-b",
+                     *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+                     *             "mgmt_ip": "10.0.0.11"
+                     *           },
+                     *           "status": "discovered"
+                     *         }
+                     *       ],
                      *       "job_id": "5e0c7a1d-0000-4000-8000-000000007002",
                      *       "progress": {
                      *         "errors": 1,
@@ -6447,6 +6886,8 @@ export interface operations {
                 at?: string | null;
                 /** @description Only devices in this location and below. */
                 location_id?: string | null;
+                /** @description Only devices with these roles. */
+                role?: components["schemas"]["DeviceRole"][] | null;
             };
             header?: never;
             path?: never;
@@ -6552,11 +6993,16 @@ export interface operations {
                      *         {
                      *           "device_id": "5e0c7a1d-0000-4000-8000-000000002001",
                      *           "device_type": "l3_switch",
+                     *           "gateway_ips": [],
                      *           "id": "5e0c7a1d-0000-4000-8000-000000002001",
                      *           "is_managed": true,
                      *           "kind": "device",
                      *           "label": "core-sw-1",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001001",
+                     *           "management_status": "managed",
+                     *           "mgmt_ip": "10.0.0.1",
+                     *           "model": "C9500-24Y4C",
+                     *           "open_alarm_count": 0,
                      *           "out_of_scope": false,
                      *           "reachability": "reachable",
                      *           "role": "core"
@@ -6564,11 +7010,16 @@ export interface operations {
                      *         {
                      *           "device_id": "5e0c7a1d-0000-4000-8000-000000002003",
                      *           "device_type": "l3_switch",
+                     *           "gateway_ips": [],
                      *           "id": "5e0c7a1d-0000-4000-8000-000000002003",
                      *           "is_managed": true,
                      *           "kind": "device",
                      *           "label": "dist-sw-b",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001002",
+                     *           "management_status": "managed",
+                     *           "mgmt_ip": "10.0.0.11",
+                     *           "model": "C9300-24T",
+                     *           "open_alarm_count": 0,
                      *           "out_of_scope": false,
                      *           "reachability": "reachable",
                      *           "role": "distribution"
@@ -6576,11 +7027,16 @@ export interface operations {
                      *         {
                      *           "device_id": "5e0c7a1d-0000-4000-8000-000000002004",
                      *           "device_type": "switch",
+                     *           "gateway_ips": [],
                      *           "id": "5e0c7a1d-0000-4000-8000-000000002004",
                      *           "is_managed": true,
                      *           "kind": "device",
                      *           "label": "sw-b2-03",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
+                     *           "management_status": "managed",
+                     *           "mgmt_ip": "10.0.0.23",
+                     *           "model": "WS-C2960X-48FPD-L",
+                     *           "open_alarm_count": 1,
                      *           "out_of_scope": false,
                      *           "reachability": "reachable",
                      *           "role": "access"
@@ -6588,24 +7044,35 @@ export interface operations {
                      *         {
                      *           "device_id": "5e0c7a1d-0000-4000-8000-000000002006",
                      *           "device_type": "ap",
+                     *           "gateway_ips": [],
                      *           "id": "5e0c7a1d-0000-4000-8000-000000002006",
                      *           "is_managed": false,
                      *           "kind": "device",
                      *           "label": "ap-b2-01",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
+                     *           "management_status": "unsupported_platform",
+                     *           "mgmt_ip": "10.0.30.41",
+                     *           "model": "AIR-AP2802I-E-K9",
+                     *           "open_alarm_count": 0,
                      *           "out_of_scope": false,
                      *           "reachability": "unknown",
-                     *           "role": "access"
+                     *           "role": "unknown"
                      *         },
                      *         {
+                     *           "device_id": "5e0c7a1d-0000-4000-8000-000000002007",
                      *           "device_type": "router",
-                     *           "id": "neighbor:198.51.100.1",
+                     *           "gateway_ips": [],
+                     *           "id": "5e0c7a1d-0000-4000-8000-000000002007",
                      *           "is_managed": false,
                      *           "kind": "device",
                      *           "label": "isp-ce-1",
+                     *           "management_status": "out_of_scope",
+                     *           "mgmt_ip": "198.51.100.1",
+                     *           "model": "ISR4331/K9",
+                     *           "open_alarm_count": 0,
                      *           "out_of_scope": true,
                      *           "reachability": "unknown",
-                     *           "role": "edge"
+                     *           "role": "unknown"
                      *         }
                      *       ]
                      *     }
@@ -6746,6 +7213,230 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["TopologyChanges"];
+                };
+            };
+            /** @description Missing or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "A valid bearer token is required."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation error (see the `errors` member) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "urn:netops:problem:validation-error",
+                     *       "title": "Unprocessable Entity",
+                     *       "errors": [
+                     *         {
+                     *           "loc": [
+                     *             "query",
+                     *             "limit"
+                     *           ],
+                     *           "msg": "Input should be less than or equal to 500",
+                     *           "type": "less_than_equal"
+                     *         }
+                     *       ],
+                     *       "status": 422,
+                     *       "detail": "The request is invalid; see errors."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Part of the contract, not implemented yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "urn:netops:problem:not-implemented",
+                     *       "title": "Not Implemented",
+                     *       "status": 501,
+                     *       "detail": "This endpoint is part of the API contract but is not implemented yet."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_topology_layout: {
+        parameters: {
+            query?: {
+                /** @description The map the positions belong to. */
+                layer?: components["schemas"]["TopologyLayer"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "layer": "l2",
+                     *       "positions": [
+                     *         {
+                     *           "node_id": "5e0c7a1d-0000-4000-8000-000000002001",
+                     *           "x": 420,
+                     *           "y": 80
+                     *         },
+                     *         {
+                     *           "node_id": "5e0c7a1d-0000-4000-8000-000000002004",
+                     *           "x": 300,
+                     *           "y": 320
+                     *         }
+                     *       ],
+                     *       "updated_at": "2026-10-09T07:55:00Z"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TopologyLayout"];
+                };
+            };
+            /** @description Missing or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "A valid bearer token is required."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation error (see the `errors` member) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "urn:netops:problem:validation-error",
+                     *       "title": "Unprocessable Entity",
+                     *       "errors": [
+                     *         {
+                     *           "loc": [
+                     *             "query",
+                     *             "limit"
+                     *           ],
+                     *           "msg": "Input should be less than or equal to 500",
+                     *           "type": "less_than_equal"
+                     *         }
+                     *       ],
+                     *       "status": 422,
+                     *       "detail": "The request is invalid; see errors."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Part of the contract, not implemented yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "urn:netops:problem:not-implemented",
+                     *       "title": "Not Implemented",
+                     *       "status": 501,
+                     *       "detail": "This endpoint is part of the API contract but is not implemented yet."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    put_topology_layout: {
+        parameters: {
+            query?: {
+                /** @description The map the positions belong to. */
+                layer?: components["schemas"]["TopologyLayer"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "positions": [
+                 *         {
+                 *           "node_id": "5e0c7a1d-0000-4000-8000-000000002001",
+                 *           "x": 420,
+                 *           "y": 80
+                 *         },
+                 *         {
+                 *           "node_id": "5e0c7a1d-0000-4000-8000-000000002004",
+                 *           "x": 300,
+                 *           "y": 320
+                 *         }
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["TopologyLayoutUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "layer": "l2",
+                     *       "positions": [
+                     *         {
+                     *           "node_id": "5e0c7a1d-0000-4000-8000-000000002001",
+                     *           "x": 420,
+                     *           "y": 80
+                     *         },
+                     *         {
+                     *           "node_id": "5e0c7a1d-0000-4000-8000-000000002004",
+                     *           "x": 300,
+                     *           "y": 320
+                     *         }
+                     *       ],
+                     *       "updated_at": "2026-10-09T07:55:00Z"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TopologyLayout"];
                 };
             };
             /** @description Missing or invalid bearer token */
@@ -9155,6 +9846,95 @@ export interface operations {
                      *       "title": "Not Implemented",
                      *       "status": 501,
                      *       "detail": "This endpoint is part of the API contract but is not implemented yet."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_credential_profiles: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["CredentialKind"][] | null;
+                /** @description Page size (1-500). */
+                limit?: number;
+                /** @description Number of items to skip. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": "5e0c7a1d-0000-4000-8000-000000008001",
+                     *           "kind": "ssh",
+                     *           "name": "campus-ro"
+                     *         },
+                     *         {
+                     *           "id": "5e0c7a1d-0000-4000-8000-000000008002",
+                     *           "kind": "ssh",
+                     *           "name": "campus-ro-2025"
+                     *         }
+                     *       ],
+                     *       "limit": 50,
+                     *       "offset": 0,
+                     *       "total": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CredentialProfilePage"];
+                };
+            };
+            /** @description Missing or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "A valid bearer token is required."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation error (see the `errors` member) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "urn:netops:problem:validation-error",
+                     *       "title": "Unprocessable Entity",
+                     *       "errors": [
+                     *         {
+                     *           "loc": [
+                     *             "query",
+                     *             "limit"
+                     *           ],
+                     *           "msg": "Input should be less than or equal to 500",
+                     *           "type": "less_than_equal"
+                     *         }
+                     *       ],
+                     *       "status": 422,
+                     *       "detail": "The request is invalid; see errors."
                      *     }
                      */
                     "application/problem+json": components["schemas"]["Problem"];

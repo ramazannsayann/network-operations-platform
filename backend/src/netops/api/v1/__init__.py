@@ -6,6 +6,7 @@ from netops.api.v1 import (
     alarms,
     auth,
     configs,
+    credentials,
     devices,
     diagnosis,
     discovery,
@@ -29,5 +30,6 @@ for module in (
     monitoring,
     configs,
     jobs,
+    credentials,
 ):
     router.include_router(module.router)

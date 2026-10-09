@@ -107,6 +107,11 @@ class VlanStatus(StrEnum):
 # --- Topology (M1) ------------------------------------------------------------------------
 
 
+class TopologyLayer(StrEnum):
+    L2 = "l2"  # devices and physical links
+    L3 = "l3"  # L3 devices and the subnets their interfaces are in
+
+
 class LinkSource(StrEnum):
     CDP = "cdp"
     LLDP = "lldp"
@@ -320,6 +325,7 @@ ALL_ENUMS: tuple[type[StrEnum], ...] = (
     Duplex,
     SwitchportMode,
     VlanStatus,
+    TopologyLayer,
     LinkSource,
     NeighborProtocol,
     DiscoveryItemStatus,

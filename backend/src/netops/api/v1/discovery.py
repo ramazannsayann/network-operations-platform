@@ -16,6 +16,7 @@ from netops.api.schemas.discovery import (
     DiscoveryProgress,
     DiscoveryRun,
     DiscoveryRunCreate,
+    DiscoveryRunItem,
     DiscoveryRunPage,
     DiscoveryRunSummary,
     SkippedNeighbor,
@@ -185,5 +186,22 @@ async def get_discovery_run(session: Session, run_id: UUID) -> DiscoveryRun:
             "found_devices": found,
             "skipped_neighbors": skipped,
             "errors": errors,
+            "items": [
+                DiscoveryRunItem(
+                    address=_ip(i.address),
+                    hop=i.hop,
+                    status=i.status,
+                    device=refs.get(i.device_id) if i.device_id else None,
+                    seen_from=refs.get(i.via_device_id) if i.via_device_id else None,
+                    local_interface=i.via_interface,
+                    neighbor_name=i.neighbor_name,
+                    platform=i.platform,
+                    attempts=i.attempts,
+                    is_new=i.is_new,
+                    error=i.error,
+                    occurred_at=i.occurred_at,
+                )
+                for i in items
+            ],
         }
     )

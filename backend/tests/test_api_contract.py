@@ -40,6 +40,9 @@ EXPECTED_V1_OPERATIONS = {
     ("GET", "/api/v1/discovery/runs/{run_id}"),
     ("GET", "/api/v1/topology"),
     ("GET", "/api/v1/topology/changes"),
+    ("GET", "/api/v1/topology/layout"),
+    ("PUT", "/api/v1/topology/layout"),
+    ("GET", "/api/v1/credential-profiles"),
     ("GET", "/api/v1/hosts/locate"),
     ("POST", "/api/v1/diagnosis/path-trace"),
     ("GET", "/api/v1/diagnosis/impact"),
@@ -58,7 +61,7 @@ EXPECTED_V1_OPERATIONS = {
     ("GET", "/api/v1/jobs/{job_id}"),
 }
 PUBLIC_OPERATIONS = {("GET", "/api/health"), ("POST", "/api/v1/auth/login")}
-# Implemented for real (step 6); they need the database and are tested in
+# Implemented for real (steps 6 and 7); they need the database and are tested in
 # tests/integration/test_api.py. Every other v1 route is still a 501 stub.
 IMPLEMENTED_OPERATIONS = {
     ("GET", "/api/v1/devices"),
@@ -69,6 +72,13 @@ IMPLEMENTED_OPERATIONS = {
     ("GET", "/api/v1/discovery/runs"),
     ("GET", "/api/v1/discovery/runs/{run_id}"),
     ("GET", "/api/v1/jobs/{job_id}"),
+    # step 7
+    ("GET", "/api/v1/topology"),
+    ("GET", "/api/v1/topology/changes"),
+    ("GET", "/api/v1/topology/layout"),
+    ("PUT", "/api/v1/topology/layout"),
+    ("GET", "/api/v1/credential-profiles"),
+    ("GET", "/api/v1/locations"),
 }
 
 SOME_ID = "5e0c7a1d-0000-4000-8000-000000002004"

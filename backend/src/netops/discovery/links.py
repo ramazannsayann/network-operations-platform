@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from netops.core.ifname import interface_kind, normalize
 from netops.db.enums import CollectionKind, LinkSource, NeighborProtocol
 from netops.db.models import (
+    CollectionRun,
     Device,
     DeviceSerial,
     Interface,
@@ -110,21 +111,19 @@ def _port(remote_port: str | None) -> str | None:
     return normalize(text)
 
 
-async def rebuild_links(session: AsyncSession) -> LinkChanges:
-    """Create, refresh and deactivate links from the latest neighbour observations."""
-    now = datetime.now(UTC)
-    runs = await runs_at(session, CollectionKind.NEIGHBORS, include_partial=True)
-    changes = LinkChanges()
-    if not runs:
-        return changes
+async def _reported(
+    session: AsyncSession,
+    runs: dict[uuid.UUID, CollectionRun],
+    interfaces: dict[InterfaceKey, Interface],
+    create_missing: datetime | None,
+) -> dict[frozenset[uuid.UUID], Candidate]:
+    """Candidate links (interface id pairs) from the observations of ``runs``.
 
+    ``create_missing``: when set, remote ports without an interface row get one (first seen
+    at that time); otherwise such reports are ignored.
+    """
     directory = _Directory()
     await directory.load(session)
-    interfaces: dict[InterfaceKey, Interface] = {
-        (i.device_id, i.name_normalized): i for i in await session.scalars(select(Interface))
-    }
-    by_id = {i.id: i for i in interfaces.values()}
-
     observations = await session.scalars(
         select(NeighborObservation).where(
             NeighborObservation.run_id.in_([r.id for r in runs.values()]),
@@ -139,6 +138,8 @@ async def rebuild_links(session: AsyncSession) -> LinkChanges:
             continue
         remote_interface = interfaces.get((remote, port))
         if remote_interface is None:
+            if create_missing is None:
+                continue
             # A port of a device not collected (yet): placeholders get interfaces this way.
             remote_interface = Interface(
                 id=uuid.uuid4(),
@@ -146,21 +147,54 @@ async def rebuild_links(session: AsyncSession) -> LinkChanges:
                 name=port,
                 name_normalized=port,
                 kind=interface_kind(port),
-                first_seen_at=now,
-                last_seen_at=now,
+                first_seen_at=create_missing,
+                last_seen_at=create_missing,
             )
             session.add(remote_interface)
             interfaces[(remote, port)] = remote_interface
-            by_id[remote_interface.id] = remote_interface
         key = frozenset({observation.local_interface_id, remote_interface.id})
         candidate = candidates.setdefault(key, Candidate())
         candidate.reported_by.add(observation.device_id)
         candidate.protocols.add(observation.protocol)
-    await session.flush()
+    return candidates
 
+
+def _accept(candidates: dict[frozenset[uuid.UUID], Candidate]) -> set[frozenset[uuid.UUID]]:
+    """Links both ends agree on, plus one-sided reports not touching their interfaces."""
     agreed = {key for key, c in candidates.items() if len(c.reported_by) == 2}
     taken = {interface for key in agreed for interface in key}
-    accepted = agreed | {key for key in candidates if key not in agreed and not key & taken}
+    return agreed | {key for key in candidates if key not in agreed and not key & taken}
+
+
+async def _interfaces(session: AsyncSession) -> dict[InterfaceKey, Interface]:
+    return {(i.device_id, i.name_normalized): i for i in await session.scalars(select(Interface))}
+
+
+async def links_reported_at(session: AsyncSession, at: datetime) -> set[frozenset[uuid.UUID]]:
+    """Interface pairs of the links the neighbours runs in force at ``at`` reported.
+
+    The same matching as rebuild_links, on the state at ``at`` (netops.db.state); device
+    identities (addresses, serials, names) are today's.
+    """
+    runs = await runs_at(session, CollectionKind.NEIGHBORS, at, include_partial=True)
+    if not runs:
+        return set()
+    return _accept(await _reported(session, runs, await _interfaces(session), None))
+
+
+async def rebuild_links(session: AsyncSession) -> LinkChanges:
+    """Create, refresh and deactivate links from the latest neighbour observations."""
+    now = datetime.now(UTC)
+    runs = await runs_at(session, CollectionKind.NEIGHBORS, include_partial=True)
+    changes = LinkChanges()
+    if not runs:
+        return changes
+
+    interfaces = await _interfaces(session)
+    candidates = await _reported(session, runs, interfaces, now)
+    await session.flush()
+    accepted = _accept(candidates)
+    by_id = {i.id: i for i in interfaces.values()}
 
     existing = {
         frozenset({link.a_interface_id, link.b_interface_id}): link
