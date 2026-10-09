@@ -12,10 +12,12 @@ IOS/IOS-XE campus networks. The design reference document is the project proposa
 decisions and their reasons are in
 [docs/adr/0001-technology-stack.md](docs/adr/0001-technology-stack.md).
 
-Current state: scaffolding, the shared data model, the v1 API contract (stubs answering
-501), encrypted credential profiles, the read-only SSH layer, parsers for 16 IOS/IOS-XE
-show commands and the M2 collectors (`collect_device` Celery task). No discovery BFS, SNMP
-polling, config management or UI screens yet.
+Current state: scaffolding, the shared data model, the v1 API contract, encrypted
+credential profiles, the read-only SSH layer, parsers for 16 IOS/IOS-XE show commands, the
+M2 collectors (`collect_device`), M1 discovery (BFS over CDP/LLDP, links, roles;
+`netops.discover`), the device/discovery/job endpoints, the `netops` operator CLI and the
+fake lab. Other endpoints still answer 501. No topology endpoints, SNMP polling, config
+management or UI screens yet.
 
 ## Architecture
 
@@ -32,7 +34,7 @@ browser ──► web (nginx: static React app, proxies /api and /ws)
 
 | Module | Scope | Code location |
 | --- | --- | --- |
-| M1 | Discovery & topology (seed/subnet scans, CDP/LLDP, topology graph) | `backend/src/netops/discovery/` |
+| M1 | Discovery & topology (seed/subnet scans, CDP/LLDP, topology graph) | `backend/src/netops/discovery/` (engine, links, roles; [ADR-0005](docs/adr/0005-discovery.md)) |
 | M2 | Inventory (facts, interfaces, VLANs, ARP/MAC, routes, HSRP, STP; device detail) | `backend/src/netops/inventory/` (collectors, `collect_device` task) |
 | M3 | Monitoring & alarms (SNMP/SSH polling, time-series metrics, thresholds) | `backend/src/netops/collectors/` |
 | M4 | Config management (backup, versioning, diff, compliance) | `backend/src/netops/configmgmt/` |
@@ -44,7 +46,12 @@ Shared backend packages: `api/` (routers), `core/` (settings, logging, Redis cli
 `ifname` interface-name normalizer, `secrets`/`crypto` for credentials), `db/` (models,
 enums, sessions, state helper, Alembic migrations), `netaccess/` (read-only SSH: Nornir +
 Netmiko behind the command guard), `parsing/` (TextFSM parsers -> dataclasses),
-`workers/` (Celery app and tasks).
+`workers/` (Celery app, tasks, job bookkeeping), `cli.py` (the `netops` operator CLI).
+
+`backend/src/netops_fakes/` is a second top-level module of the same package: the fake lab
+(topology model, state derivation, IOS output rendering, fake SSH devices, accuracy
+evaluation). Tests, the fakelab containers and `tools/eval/` use it; `netops` must never
+import it.
 
 ## Data model
 
@@ -70,7 +77,9 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
   time travel, enums reused from `netops.db.enums`, bearer auth declared on every endpoint
   except health and login). WebSocket: `docs/api/websocket.md`.
 - Unimplemented endpoints raise `not_implemented()` (501 problem). When implementing one,
-  keep the contract; any contract change is reviewed as a diff of `openapi.json`.
+  keep the contract (any contract change is reviewed as a diff of `openapi.json`), add it
+  to `IMPLEMENTED_OPERATIONS` in `tests/test_api_contract.py` and test it against the
+  database in `tests/integration/test_api.py`.
 - Every schema needs a realistic example from `netops/api/schemas/examples.py`
   (private/documentation addresses only).
 - After any change under `netops/api/`, run `make openapi` and commit `docs/api/openapi.json`
@@ -92,6 +101,21 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
   never log them, and `redact()` error text that might contain one. Stored secrets are
   Fernet-encrypted with `CREDENTIALS_KEY` (generated into `deploy/.env` by `make up`).
 - Create database engines with `netops.db.session.create_engine` (inet values as strings).
+- Collectors run per device type (`collectors.kinds_for` / `commands_for`): routers skip
+  switching commands, L2 switches skip routing.
+- SSH sessions connect where `netops.netaccess.target` resolves the management address to
+  (identity in production). Never use the resolved address for scope checks or storage.
+
+## Discovery (ADR-0005)
+
+- `netops.discovery.engine.run_discovery` is one BFS run (Celery task `netops.discover`):
+  at most two logins per device, de-duplication by serial, placeholders (unmanaged devices
+  with a `management_status`) for everything not crawled, then links and roles.
+- Work started through the API creates a `jobs` row (`netops.workers.jobs`) and is enqueued
+  by task name through the `get_task_queue` dependency.
+- The fake lab (`lab/fakelab/topology.yaml`) must keep rendering output that our parsers
+  parse into exactly what it describes (`tests/test_fakelab.py`); after editing it, run
+  `make fakelab-compose`.
 
 ## Repository layout
 
@@ -99,7 +123,8 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
 - `frontend/`: Vite + React + TypeScript (strict)
 - `deploy/`: `docker-compose.yml`, nginx config, `.env.example`
 - `docs/adr/`: architecture decision records; `docs/data-model.md`: schema overview
-- `lab/`: lab topologies and captured device fixtures (placeholder)
+- `lab/`: device output fixtures (`fixtures/`) and the fake lab (`fakelab/topology.yaml`)
+- `tools/eval/`: evaluation scripts (`discovery_accuracy.py`)
 
 ## Commands
 
@@ -114,6 +139,9 @@ make logs       # follow logs
 make down       # stop (keeps the db volume)
 make test       # backend unit tests (no database or network)
 make test-integration  # integration tests against the compose db (needs `make up`)
+make test-scale        # discover a generated 50-device campus (SCALE_DEVICES=200 for more)
+make fakelab-up        # stack + fake devices; then fakelab-seed, fakelab-discover,
+                       # fakelab-accuracy, fakelab-down (see lab/fakelab/README.md)
 make lint       # ruff, ruff format --check, mypy --strict, eslint, prettier, tsc
 make format     # auto-fix formatting
 make openapi    # regenerate docs/api/openapi.json and frontend/src/api/schema.d.ts

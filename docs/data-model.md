@@ -38,12 +38,15 @@ erDiagram
         inet mgmt_ip UK
         device_type device_type
         device_role role
+        bool role_is_manual "heuristic leaves it alone"
         os_family os_family
         uuid location_id FK
         bool is_managed
+        management_status management_status "why (not) managed"
         reachability reachability
         discovery_source discovered_via
-        uuid credential_profile_id FK
+        uuid credential_profile_id FK "the profile that worked"
+        int ssh_port "NULL: SSH_PORT"
         timestamptz last_seen_at
     }
     credential_profiles {
@@ -81,6 +84,52 @@ erDiagram
         bool is_active
     }
 ```
+
+## Discovery runs and jobs
+
+```mermaid
+erDiagram
+    jobs ||--o| discovery_runs : "tracks"
+    discovery_runs ||--o{ discovery_run_items : "dealt with"
+    devices |o--o{ discovery_run_items : "found / placeholder"
+    devices |o--o{ discovery_run_items : "seen from (via)"
+
+    jobs {
+        uuid id PK
+        job_kind kind "device_refresh or discovery"
+        job_status status
+        uuid target_id "device or discovery run"
+        int progress_completed
+        int progress_total
+        text error
+    }
+    discovery_runs {
+        uuid id PK
+        uuid job_id FK, UK
+        job_status status
+        inet_array seeds
+        cidr_array allowed_subnets
+        uuid_array credential_profile_ids "in order"
+        int found "and queued, scanned, new_devices, skipped, errors"
+    }
+    discovery_run_items {
+        bigint id PK
+        uuid run_id FK
+        inet address "unique per run"
+        int hop
+        uuid via_device_id FK
+        text via_interface
+        discovery_item_status status
+        uuid device_id FK
+        int attempts "at most 2"
+        text error
+    }
+```
+
+Discovery (M1, [ADR-0005](adr/0005-discovery.md)) records one item per address it dealt
+with. Devices it does not log in to (out of scope, wrong credentials, access points) are
+still created as unmanaged placeholders so the map shows them; `devices.management_status`
+says why.
 
 ## Collection runs and observations
 
@@ -234,7 +283,10 @@ erDiagram
 | `credential_profiles` | Named SSH / SNMPv3 credentials; secrets Fernet-encrypted ([ADR-0004](adr/0004-credentials-and-device-access.md)). |
 | `interfaces` | Device interfaces by normalized name, with port-channel membership and the latest known state. |
 | `interface_addresses` | IP addresses (with prefix) configured on interfaces; used for subnet → gateway lookups. |
-| `links` | Physical links between two interfaces, stored once (a < b), from CDP/LLDP, inference or manual entry. |
+| `links` | Physical links between two interfaces, stored once (a < b), from CDP/LLDP, inference or manual entry; inactive once no longer reported. |
+| `jobs` | Long-running operations started through the API (device refresh, discovery): status, progress, error. |
+| `discovery_runs` | One discovery run: seeds, allowed subnets, credential profiles, progress counters. |
+| `discovery_run_items` | What a run did with each address: discovered, duplicate, auth_failed, unreachable, out_of_scope, unsupported_platform, no_mgmt_ip. |
 | `collection_runs` | One row per collector execution: device, kind, trigger, status and timing; defines point-in-time state. |
 | `alarms` | Problems with a lifecycle (open → acknowledged → cleared), deduplicated per `dedup_key`. |
 | `incidents` | Groups of alarms attributed to one root cause by M6. |
