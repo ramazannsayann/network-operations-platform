@@ -229,3 +229,12 @@ def test_synthetic_topologies_have_the_same_structure_and_round_trip(n: int) -> 
 def test_synthetic_rejects_sizes_outside_the_address_plan() -> None:
     with pytest.raises(ValueError, match="between 6 and 240"):
         synthetic(500)
+
+
+def test_committed_fakelab_compose_file_is_up_to_date() -> None:
+    from netops_fakes.compose import render as render_compose
+
+    committed = TOPOLOGY.parents[2] / "deploy" / "docker-compose.fakelab.yml"
+    assert committed.read_text() == render_compose(load(TOPOLOGY)), (
+        "deploy/docker-compose.fakelab.yml is stale: run `make fakelab-compose`"
+    )

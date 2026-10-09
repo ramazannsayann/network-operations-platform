@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 # One image for the api, worker and scheduler services; each sets its own command.
+# The last stage (runtime) is the default target; `fakelab` builds the fake devices.
 
 # ---- build: install locked dependencies and the netops package into /app/.venv ----
 FROM python:3.12-slim-trixie AS build
@@ -21,8 +22,24 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
-# ---- runtime: no build tooling, runs as an unprivileged user ----
-FROM python:3.12-slim-trixie
+# ---- fakelab: the fake SSH devices of the fake lab (deploy/docker-compose.fakelab.yml) ----
+# Same package plus the optional "fakelab" extra (asyncssh). Not part of the platform.
+FROM build AS build-fakelab
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --no-editable --extra fakelab
+
+FROM python:3.12-slim-trixie AS fakelab
+RUN groupadd --system --gid 10001 netops \
+    && useradd --system --uid 10001 --gid netops --no-create-home netops
+COPY --from=build-fakelab /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+USER netops
+ENTRYPOINT ["python", "-m", "netops_fakes.serve"]
+
+# ---- runtime: no build tooling, runs as an unprivileged user (the default target) ----
+FROM python:3.12-slim-trixie AS runtime
 RUN groupadd --system --gid 10001 netops \
     && useradd --system --uid 10001 --gid netops --no-create-home netops
 WORKDIR /app
