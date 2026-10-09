@@ -123,6 +123,9 @@ export interface paths {
         /**
          * List Devices
          * @description Inventory. ``q`` matches hostname, management IP or serial number (substring).
+         *
+         *     Devices discovery found but does not manage (out of scope, wrong credentials, access
+         *     points...) are included; ``management_status`` tells them apart.
          */
         get: operations["list_devices"];
         put?: never;
@@ -1166,6 +1169,7 @@ export interface components {
          *         "name": "Floor 2",
          *         "path": "Main campus / B Block / Floor 2"
          *       },
+         *       "management_status": "managed",
          *       "mgmt_ip": "10.0.0.23",
          *       "model": "WS-C2960X-48FPD-L",
          *       "open_alarm_count": 1,
@@ -1207,6 +1211,8 @@ export interface components {
             location: components["schemas"]["LocationRef"] | null;
             /** Is Managed */
             is_managed: boolean;
+            /** @description Why the platform does (not) manage the device. Discovery also lists devices it does not log in to (out of scope, wrong credentials, access points...). */
+            management_status: components["schemas"]["ManagementStatus"];
             reachability: components["schemas"]["Reachability"];
             discovered_via: components["schemas"]["DiscoverySource"];
             /** Serials */
@@ -1278,6 +1284,7 @@ export interface components {
          *             "name": "Main campus",
          *             "path": "Main campus"
          *           },
+         *           "management_status": "managed",
          *           "mgmt_ip": "10.0.0.1",
          *           "model": "C9500-24Y4C",
          *           "open_alarm_count": 0,
@@ -1304,6 +1311,7 @@ export interface components {
          *             "name": "Floor 2",
          *             "path": "Main campus / B Block / Floor 2"
          *           },
+         *           "management_status": "managed",
          *           "mgmt_ip": "10.0.0.23",
          *           "model": "WS-C2960X-48FPD-L",
          *           "open_alarm_count": 1,
@@ -1408,6 +1416,7 @@ export interface components {
          *         "name": "Floor 2",
          *         "path": "Main campus / B Block / Floor 2"
          *       },
+         *       "management_status": "managed",
          *       "mgmt_ip": "10.0.0.23",
          *       "model": "WS-C2960X-48FPD-L",
          *       "open_alarm_count": 1,
@@ -1443,6 +1452,8 @@ export interface components {
             location: components["schemas"]["LocationRef"] | null;
             /** Is Managed */
             is_managed: boolean;
+            /** @description Why the platform does (not) manage the device. Discovery also lists devices it does not log in to (out of scope, wrong credentials, access points...). */
+            management_status: components["schemas"]["ManagementStatus"];
             reachability: components["schemas"]["Reachability"];
             discovered_via: components["schemas"]["DiscoverySource"];
             /** Serials */
@@ -1667,7 +1678,7 @@ export interface components {
             allowed_subnets: string[];
             /**
              * Credential Profile Ids
-             * @description Credential profiles to try, in order (at most two per device). Opaque ids until M7 defines credential profiles.
+             * @description SSH credential profiles to try, in order. At most two logins per device: the profile that worked on it before first, then these.
              */
             credential_profile_ids: string[];
         };
@@ -3476,6 +3487,15 @@ export interface components {
             password: string;
         };
         /**
+         * ManagementStatus
+         * @description Whether the platform manages a device, and if not, why (set by discovery).
+         *
+         *     Discovery also records devices it does not log in to, so they appear on the topology
+         *     map; this flag lets the map mark them without joining discovery history.
+         * @enum {string}
+         */
+        ManagementStatus: "managed" | "out_of_scope" | "auth_failed" | "unreachable" | "unsupported_platform" | "manual";
+        /**
          * MetricPoint
          * @example {
          *       "time": "2026-10-09T07:50:00Z",
@@ -5250,6 +5270,7 @@ export interface operations {
                 role?: components["schemas"]["DeviceRole"][] | null;
                 location_id?: string | null;
                 reachability?: components["schemas"]["Reachability"][] | null;
+                management_status?: components["schemas"]["ManagementStatus"][] | null;
                 /** @description Case-insensitive text search. */
                 q?: string | null;
                 sort?: "hostname" | "-hostname" | "mgmt_ip" | "-mgmt_ip" | "last_seen_at" | "-last_seen_at";
@@ -5287,6 +5308,7 @@ export interface operations {
                      *             "name": "Main campus",
                      *             "path": "Main campus"
                      *           },
+                     *           "management_status": "managed",
                      *           "mgmt_ip": "10.0.0.1",
                      *           "model": "C9500-24Y4C",
                      *           "open_alarm_count": 0,
@@ -5313,6 +5335,7 @@ export interface operations {
                      *             "name": "Floor 2",
                      *             "path": "Main campus / B Block / Floor 2"
                      *           },
+                     *           "management_status": "managed",
                      *           "mgmt_ip": "10.0.0.23",
                      *           "model": "WS-C2960X-48FPD-L",
                      *           "open_alarm_count": 1,
@@ -5444,6 +5467,7 @@ export interface operations {
                      *         "name": "Floor 2",
                      *         "path": "Main campus / B Block / Floor 2"
                      *       },
+                     *       "management_status": "managed",
                      *       "mgmt_ip": "10.0.0.23",
                      *       "model": "WS-C2960X-48FPD-L",
                      *       "open_alarm_count": 1,

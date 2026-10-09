@@ -24,6 +24,7 @@ from netops.db.enums import (
     DiscoverySource,
     Duplex,
     InterfaceKind,
+    ManagementStatus,
     OsFamily,
     Reachability,
     SwitchportMode,
@@ -41,6 +42,7 @@ _ACC_SUMMARY: dict[str, Any] = {
     "os_version": "15.2(7)E10",
     "location": ex.LOCATION_REF_FLOOR_2,
     "is_managed": True,
+    "management_status": "managed",
     "reachability": "reachable",
     "discovered_via": "cdp",
     "serials": ["FOC2051X0AB"],
@@ -61,6 +63,7 @@ _CORE_SUMMARY: dict[str, Any] = {
     "os_version": "17.12.4",
     "location": {"id": ex.LOC_CAMPUS, "name": "Main campus", "path": "Main campus"},
     "is_managed": True,
+    "management_status": "managed",
     "reachability": "reachable",
     "discovered_via": "seed",
     "serials": ["FDO2312A1BC"],
@@ -85,6 +88,10 @@ class DeviceSummary(ApiModel):
     os_version: str | None
     location: LocationRef | None
     is_managed: bool
+    management_status: ManagementStatus = Field(
+        description="Why the platform does (not) manage the device. Discovery also lists "
+        "devices it does not log in to (out of scope, wrong credentials, access points...)."
+    )
     reachability: Reachability
     discovered_via: DiscoverySource
     serials: list[str]

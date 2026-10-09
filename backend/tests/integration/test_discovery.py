@@ -4,23 +4,18 @@ address to its fake device; scope checks and everything stored use the real addr
 
 import asyncio
 import ipaddress
-import secrets
 import time
 import uuid
-from collections.abc import Iterator
 from dataclasses import dataclass
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from netops.core.secrets import Secret
 from netops.core.settings import get_settings
 from netops.db import models as m
 from netops.db.enums import (
     CollectionStatus,
-    CredentialKind,
     DeviceRole,
     DeviceType,
     DiscoveryItemStatus,
@@ -36,40 +31,13 @@ from netops.discovery.service import (
 from netops_fakes.accuracy import evaluate
 from netops_fakes.local import LocalLab
 from netops_fakes.topology import Topology, load
-from tests.integration.support import clear_inventory, run
+from tests.integration.support import FAKELAB_TOPOLOGY, PASSWORD, USERNAME, run
 
 pytestmark = pytest.mark.integration
 
-TOPOLOGY = Path(__file__).resolve().parents[3] / "lab" / "fakelab" / "topology.yaml"
+TOPOLOGY = FAKELAB_TOPOLOGY
 ALLOWED = ipaddress.ip_network("10.255.0.0/24")
 SEED = ipaddress.ip_address("10.255.0.2")  # core1
-USERNAME = "netops-ro"
-PASSWORD = "pw-" + secrets.token_hex(8)  # random per run: no password literal in the repo
-OUTDATED = "pw-" + secrets.token_hex(8)  # a profile tried first that no device accepts
-
-
-@pytest.fixture
-def profiles(app_on_test_database: None) -> Iterator[list[uuid.UUID]]:
-    """An empty inventory and two SSH profiles: an outdated one first, then the lab's."""
-
-    async def create(session: AsyncSession) -> list[uuid.UUID]:
-        await clear_inventory(session)
-        rows = [
-            m.CredentialProfile(
-                id=uuid.uuid4(),
-                name=name,
-                kind=CredentialKind.SSH,
-                username=USERNAME,
-                password=Secret(password),
-            )
-            for name, password in (("lab-outdated", OUTDATED), ("lab", PASSWORD))
-        ]
-        session.add_all(rows)
-        await session.commit()
-        return [row.id for row in rows]
-
-    yield run(create)
-    run(clear_inventory)
 
 
 def discover(lab: LocalLab, profile_ids: list[uuid.UUID]) -> uuid.UUID:

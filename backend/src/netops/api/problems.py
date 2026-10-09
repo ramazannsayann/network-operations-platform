@@ -18,6 +18,7 @@ PROBLEM_MEDIA_TYPE = "application/problem+json"
 # Problem types specific to this API. Plain HTTP errors use "about:blank" (RFC 9457 4.2.1).
 NOT_IMPLEMENTED = "urn:netops:problem:not-implemented"
 VALIDATION_ERROR = "urn:netops:problem:validation-error"
+JOB_FAILED = "urn:netops:problem:job-failed"
 
 
 VALIDATION_ISSUE_EXAMPLE: dict[str, Any] = {

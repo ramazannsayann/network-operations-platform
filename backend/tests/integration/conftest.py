@@ -8,6 +8,7 @@ test session, so the application database is never touched. Connections to anyth
 
 import asyncio
 import re
+import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from sqlalchemy.pool import NullPool
 
 from netops.core.settings import get_settings
 from netops.db.session import create_engine
+from tests.integration.support import clear_inventory, create_lab_profiles, run
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 LOCAL_HOSTS = ["127.0.0.1", "::1"]
@@ -131,3 +133,10 @@ def app_on_test_database(monkeypatch: pytest.MonkeyPatch, migrated_database: URL
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture
+def profiles(app_on_test_database: None) -> Iterator[list[uuid.UUID]]:
+    """Empty inventory + the fake lab's credential profiles [outdated, lab]; cleared after."""
+    yield run(create_lab_profiles)
+    run(clear_inventory)
