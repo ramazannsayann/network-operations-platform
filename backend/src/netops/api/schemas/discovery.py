@@ -7,8 +7,8 @@ from uuid import UUID
 from pydantic import AwareDatetime, Field, IPvAnyAddress, IPvAnyNetwork
 
 from netops.api.schemas import examples as ex
-from netops.api.schemas.common import ApiModel, DeviceRef, JobStatus, Page, example
-from netops.db.enums import DiscoverySource
+from netops.api.schemas.common import ApiModel, DeviceRef, Page, example
+from netops.db.enums import DiscoverySource, JobStatus
 
 
 class SkipReason(StrEnum):
@@ -36,8 +36,8 @@ class DiscoveryRunCreate(ApiModel):
     )
     credential_profile_ids: list[UUID] = Field(
         min_length=1,
-        description="Credential profiles to try, in order (at most two per device). Opaque "
-        "ids until M7 defines credential profiles.",
+        description="SSH credential profiles to try, in order. At most two logins per device: "
+        "the profile that worked on it before first, then these.",
     )
 
 

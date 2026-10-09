@@ -6,8 +6,10 @@ IOS/IOS-XE campus networks. Graduation project.
 Design reference: the project proposal,
 [docs/proposal/proposal-v2.pdf](docs/proposal/proposal-v2.pdf) (in Turkish).
 
-> Status: repository scaffolding. The stack runs end to end (UI → nginx → API → TimescaleDB
-> and Redis, plus Celery workers), but no network features are implemented yet.
+> Status: discovery (M1) and inventory collection (M2) work against a fake lab; the
+> device, discovery and job endpoints are implemented, the UI screens and the other modules
+> are not yet. The stack runs end to end (UI → nginx → API → TimescaleDB and Redis, plus
+> Celery workers).
 
 ## Quickstart
 
@@ -68,8 +70,8 @@ New migration: `cd backend && uv run alembic revision --autogenerate -m "add dev
 The REST API is defined contract-first: [docs/api/openapi.json](docs/api/openapi.json)
 (browsable at <http://localhost:8080/api/docs> when the stack runs), conventions in
 [ADR-0003](docs/adr/0003-api-conventions.md), live updates in
-[docs/api/websocket.md](docs/api/websocket.md). Most endpoints still answer
-`501 Not Implemented`.
+[docs/api/websocket.md](docs/api/websocket.md). Devices, discovery runs and jobs are
+implemented; the other endpoints still answer `501 Not Implemented`.
 
 After changing schemas or routers in `backend/src/netops/api/`, regenerate and commit the
 document and the frontend types (CI fails if they are stale):
@@ -90,14 +92,34 @@ The mock enforces the declared security: send any `Authorization: Bearer <token>
 (tokens are not checked yet). Other responses can be requested with a `Prefer` header,
 e.g. `Prefer: code=404` or `Prefer: example=not_found` on `/api/v1/hosts/locate`.
 
+## Fake lab and discovery
+
+A made-up campus of fake Cisco devices ([lab/fakelab/](lab/fakelab/README.md)) runs in
+containers next to the stack, so discovery can be tried without real equipment:
+
+```bash
+make fakelab-up         # the stack plus one container per fake device (10.255.0.0/24)
+make fakelab-seed       # two SSH credential profiles, created with the netops CLI
+make fakelab-discover   # discover from core1; prints what happened to every address
+make fakelab-accuracy   # device/link precision and recall against topology.yaml
+make fakelab-down       # stop everything; `make up` for the normal stack again
+```
+
+Results are in the API (`GET /api/v1/devices`, `/api/v1/discovery/runs`) and in
+`docker compose -f deploy/docker-compose.yml exec api netops devices list`. The operator CLI
+(`netops --help` in the api container) also adds credential profiles for a real network
+(`netops credentials add NAME --username USER` prompts for the password) and starts
+discovery with your own seeds and subnets. Design: [ADR-0005](docs/adr/0005-discovery.md).
+
 ## Repository layout
 
 ```
-backend/    FastAPI app, Celery workers, Alembic migrations (Python package `netops`)
+backend/    FastAPI app, Celery workers, Alembic migrations (package `netops`), fake lab (`netops_fakes`)
 frontend/   React + TypeScript (Vite) single-page app
 deploy/     docker-compose.yml, nginx config, .env.example
 docs/       data model overview (data-model.md) and architecture decision records (adr/)
-lab/        lab topologies and captured device fixtures (placeholder)
+lab/        device output fixtures and the fake lab topology
+tools/      evaluation scripts (discovery accuracy)
 ```
 
 How we work (branches, pull requests, checks, what must never be committed):

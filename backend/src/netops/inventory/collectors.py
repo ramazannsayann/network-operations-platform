@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from netops.db.enums import CollectionKind
+from netops.db.enums import CollectionKind, DeviceType
 from netops.db.models import (
     ArpEntry,
     DeviceSerial,
@@ -396,3 +396,53 @@ COLLECTORS: dict[CollectionKind, Collector] = {
 
 # Collection kinds collect_device runs by default ("config" belongs to M4).
 DEFAULT_KINDS: tuple[CollectionKind, ...] = tuple(COLLECTORS)
+
+# --- command sets by device type ----------------------------------------------------------------
+
+# Commands only switches have; a router answers them with "% Invalid input", which would
+# turn its runs into partial ones.
+SWITCH_ONLY_COMMANDS = frozenset(
+    {
+        "show interfaces switchport",
+        "show etherchannel summary",
+        "show vlan brief",
+        "show mac address-table",
+        "show spanning-tree",
+    }
+)
+
+# What to collect per device type (set by discovery). Other types, including unknown,
+# get every kind.
+KINDS_BY_TYPE: dict[DeviceType, tuple[CollectionKind, ...]] = {
+    DeviceType.SWITCH: (
+        CollectionKind.FACTS,
+        CollectionKind.INTERFACES,
+        CollectionKind.NEIGHBORS,
+        CollectionKind.VLANS,
+        CollectionKind.MAC_TABLE,
+        CollectionKind.ARP_TABLE,
+        CollectionKind.STP,
+    ),
+    DeviceType.L3_SWITCH: DEFAULT_KINDS,
+    DeviceType.ROUTER: (
+        CollectionKind.FACTS,
+        CollectionKind.INTERFACES,
+        CollectionKind.NEIGHBORS,
+        CollectionKind.ARP_TABLE,
+        CollectionKind.ROUTES,
+        CollectionKind.HSRP,
+        CollectionKind.OSPF,
+    ),
+}
+
+
+def kinds_for(device_type: DeviceType) -> tuple[CollectionKind, ...]:
+    return KINDS_BY_TYPE.get(device_type, DEFAULT_KINDS)
+
+
+def commands_for(kind: CollectionKind, device_type: DeviceType) -> tuple[str, ...]:
+    """The commands of ``kind``'s collector that a device of this type has."""
+    commands = COLLECTORS[kind].commands
+    if device_type is DeviceType.ROUTER:
+        return tuple(c for c in commands if c not in SWITCH_ONLY_COMMANDS)
+    return commands

@@ -17,7 +17,7 @@ celery_app = Celery(
     "netops",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["netops.workers.tasks", "netops.inventory.tasks"],
+    include=["netops.workers.tasks", "netops.inventory.tasks", "netops.discovery.tasks"],
 )
 celery_app.conf.update(
     task_serializer="json",

@@ -2,7 +2,7 @@
 
 import pytest
 
-from netops.core.ifname import interface_kind, normalize
+from netops.core.ifname import abbreviate, interface_kind, normalize
 from netops.db.enums import InterfaceKind
 
 
@@ -147,3 +147,24 @@ def test_empty_name_is_rejected(raw: str) -> None:
 )
 def test_interface_kind(name: str, kind: InterfaceKind) -> None:
     assert interface_kind(name) is kind
+
+
+@pytest.mark.parametrize(
+    ("name", "short"),
+    [
+        ("GigabitEthernet1/0/1", "Gi1/0/1"),
+        ("TenGigabitEthernet1/1/1", "Te1/1/1"),
+        ("TwentyFiveGigE1/0/1", "Twe1/0/1"),
+        ("TwoGigabitEthernet1/0/1", "Tw1/0/1"),
+        ("Port-channel10", "Po10"),
+        ("Vlan99", "Vl99"),
+        ("Loopback0", "Lo0"),
+        ("Gi0/0.100", "Gi0/0.100"),
+        ("mgmt0", "mgmt0"),
+    ],
+)
+def test_abbreviate(name: str, short: str) -> None:
+    assert abbreviate(name) == short
+    # Abbreviations normalize back to the long form (except unknown types).
+    if short != "mgmt0":
+        assert normalize(short) == normalize(name)

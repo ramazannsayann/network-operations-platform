@@ -955,7 +955,7 @@
           "devices"
         ],
         "summary": "List Devices",
-        "description": "Inventory. ``q`` matches hostname, management IP or serial number (substring).",
+        "description": "Inventory. ``q`` matches hostname, management IP or serial number (substring).\n\nDevices discovery found but does not manage (out of scope, wrong credentials, access\npoints...) are included; ``management_status`` tells them apart.",
         "operationId": "list_devices",
         "security": [
           {
@@ -1035,6 +1035,25 @@
                 }
               ],
               "title": "Reachability"
+            }
+          },
+          {
+            "name": "management_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ManagementStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Management Status"
             }
           },
           {
@@ -1127,6 +1146,7 @@
                         "name": "Main campus",
                         "path": "Main campus"
                       },
+                      "management_status": "managed",
                       "mgmt_ip": "10.0.0.1",
                       "model": "C9500-24Y4C",
                       "open_alarm_count": 0,
@@ -1153,6 +1173,7 @@
                         "name": "Floor 2",
                         "path": "Main campus / B Block / Floor 2"
                       },
+                      "management_status": "managed",
                       "mgmt_ip": "10.0.0.23",
                       "model": "WS-C2960X-48FPD-L",
                       "open_alarm_count": 1,
@@ -1295,6 +1316,7 @@
                     "name": "Floor 2",
                     "path": "Main campus / B Block / Floor 2"
                   },
+                  "management_status": "managed",
                   "mgmt_ip": "10.0.0.23",
                   "model": "WS-C2960X-48FPD-L",
                   "open_alarm_count": 1,
@@ -7340,6 +7362,10 @@
             "type": "boolean",
             "title": "Is Managed"
           },
+          "management_status": {
+            "$ref": "#/components/schemas/ManagementStatus",
+            "description": "Why the platform does (not) manage the device. Discovery also lists devices it does not log in to (out of scope, wrong credentials, access points...)."
+          },
           "reachability": {
             "$ref": "#/components/schemas/Reachability"
           },
@@ -7426,6 +7452,7 @@
           "os_version",
           "location",
           "is_managed",
+          "management_status",
           "reachability",
           "discovered_via",
           "serials",
@@ -7469,6 +7496,7 @@
               "name": "Floor 2",
               "path": "Main campus / B Block / Floor 2"
             },
+            "management_status": "managed",
             "mgmt_ip": "10.0.0.23",
             "model": "WS-C2960X-48FPD-L",
             "open_alarm_count": 1,
@@ -7569,6 +7597,7 @@
                   "name": "Main campus",
                   "path": "Main campus"
                 },
+                "management_status": "managed",
                 "mgmt_ip": "10.0.0.1",
                 "model": "C9500-24Y4C",
                 "open_alarm_count": 0,
@@ -7595,6 +7624,7 @@
                   "name": "Floor 2",
                   "path": "Main campus / B Block / Floor 2"
                 },
+                "management_status": "managed",
                 "mgmt_ip": "10.0.0.23",
                 "model": "WS-C2960X-48FPD-L",
                 "open_alarm_count": 1,
@@ -7819,6 +7849,10 @@
             "type": "boolean",
             "title": "Is Managed"
           },
+          "management_status": {
+            "$ref": "#/components/schemas/ManagementStatus",
+            "description": "Why the platform does (not) manage the device. Discovery also lists devices it does not log in to (out of scope, wrong credentials, access points...)."
+          },
           "reachability": {
             "$ref": "#/components/schemas/Reachability"
           },
@@ -7874,6 +7908,7 @@
           "os_version",
           "location",
           "is_managed",
+          "management_status",
           "reachability",
           "discovered_via",
           "serials",
@@ -7898,6 +7933,7 @@
               "name": "Floor 2",
               "path": "Main campus / B Block / Floor 2"
             },
+            "management_status": "managed",
             "mgmt_ip": "10.0.0.23",
             "model": "WS-C2960X-48FPD-L",
             "open_alarm_count": 1,
@@ -8225,7 +8261,7 @@
             "type": "array",
             "minItems": 1,
             "title": "Credential Profile Ids",
-            "description": "Credential profiles to try, in order (at most two per device). Opaque ids until M7 defines credential profiles."
+            "description": "SSH credential profiles to try, in order. At most two logins per device: the profile that worked on it before first, then these."
           }
         },
         "type": "object",
@@ -11417,6 +11453,19 @@
             "username": "operator1"
           }
         ]
+      },
+      "ManagementStatus": {
+        "type": "string",
+        "enum": [
+          "managed",
+          "out_of_scope",
+          "auth_failed",
+          "unreachable",
+          "unsupported_platform",
+          "manual"
+        ],
+        "title": "ManagementStatus",
+        "description": "Whether the platform manages a device, and if not, why (set by discovery).\n\nDiscovery also records devices it does not log in to, so they appear on the topology\nmap; this flag lets the map mark them without joining discovery history."
       },
       "MetricPoint": {
         "properties": {

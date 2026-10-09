@@ -19,6 +19,7 @@ from netops.core.secrets import redact
 from netops.core.settings import Settings, get_settings
 from netops.netaccess.guard import check_all, check_read_only
 from netops.netaccess.inventory import CONNECTION, DeviceAccess, build_nornir
+from netops.netaccess.target import TargetResolver, resolve_target
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ class ShowResult:
     # True when the device could not be reached at all (timeout, refused), as opposed to
     # e.g. an authentication failure on a reachable device.
     unreachable: bool = False
+    # True when the device rejected the credentials (never retried, see ADR-0004).
+    auth_failed: bool = False
 
 
 def _first_line(exc: BaseException) -> str:
@@ -52,6 +55,7 @@ def _show_task(task: Task, commands: tuple[str, ...], retries: int) -> Result:
         except NetmikoAuthenticationException:
             # Not retried: repeated failures can lock the account on the AAA server.
             result.error = "SSH authentication failed (check the credential profile)"
+            result.auth_failed = True
             return Result(host=task.host, result=result)
         except (NetmikoTimeoutException, OSError) as exc:
             result.error = f"SSH connection failed: {_first_line(exc)}"
@@ -76,17 +80,20 @@ def run_show(
     accesses: Sequence[DeviceAccess],
     commands: Iterable[str],
     settings: Settings | None = None,
+    resolve: TargetResolver | None = None,
 ) -> dict[UUID, ShowResult]:
     """Run read-only ``commands`` on every device (in parallel); never raises for a device.
 
     All commands are checked by the read-only guard before any connection is opened, so a
-    forbidden command raises ReadOnlyCommandError without anything being sent.
+    forbidden command raises ReadOnlyCommandError without anything being sent. At most
+    SSH_MAX_CONCURRENCY sessions are open at once. ``resolve`` overrides the installed
+    connection-target resolver (netops.netaccess.target).
     """
     checked = check_all(commands)
     settings = settings or get_settings()
     if not accesses:
         return {}
-    nornir = build_nornir(accesses, settings)
+    nornir = build_nornir(accesses, settings, resolve or resolve_target)
     try:
         aggregated = nornir.run(
             task=_show_task,

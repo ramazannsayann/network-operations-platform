@@ -125,3 +125,33 @@ def interface_kind(name: str) -> InterfaceKind:
     if match is None or "." in match["number"]:
         return InterfaceKind.OTHER
     return _KIND_BY_TYPE.get(match["type"], InterfaceKind.OTHER)
+
+
+# The short forms IOS prints in LLDP, "show vlan", "show spanning-tree", "show standby".
+_ABBREVIATIONS: Final[dict[str, str]] = {
+    "Ethernet": "Et",
+    "FastEthernet": "Fa",
+    "GigabitEthernet": "Gi",
+    "TwoGigabitEthernet": "Tw",
+    "FiveGigabitEthernet": "Fi",
+    "TenGigabitEthernet": "Te",
+    "TwentyFiveGigE": "Twe",
+    "FortyGigabitEthernet": "Fo",
+    "HundredGigE": "Hu",
+    "AppGigabitEthernet": "Ap",
+    "Port-channel": "Po",
+    "Vlan": "Vl",
+    "Loopback": "Lo",
+    "Tunnel": "Tu",
+    "Serial": "Se",
+    "Null": "Nu",
+}
+
+
+def abbreviate(name: str) -> str:
+    """The short form of an interface name: "TenGigabitEthernet1/0/1" -> "Te1/0/1"."""
+    canonical = normalize(name)
+    match = _NAME_RE.fullmatch(canonical)
+    if match is None or match["type"] not in _ABBREVIATIONS:
+        return canonical
+    return f"{_ABBREVIATIONS[match['type']]}{match['number']}"
