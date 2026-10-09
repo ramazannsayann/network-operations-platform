@@ -1,8 +1,10 @@
 """The operator CLI against the test database (and the fake lab for ``discover``)."""
 
+import re
 import uuid
 
 import pytest
+import typer.rich_utils
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typer.testing import CliRunner
@@ -18,6 +20,21 @@ pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_BOX = re.compile(r"[\u2500-\u257f]")  # Rich panel borders
+
+
+@pytest.fixture(autouse=True)
+def render_like_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Typer forces Rich terminal output (colours, boxed errors) when GITHUB_ACTIONS is
+    set; render that way here too, so local runs see what CI sees."""
+    monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", True)
+
+
+def plain(output: str) -> str:
+    """CLI output without colours, panel borders and line wrapping."""
+    return " ".join(_BOX.sub(" ", _ANSI.sub("", output)).split())
+
 
 def test_credentials_are_read_from_stdin_and_never_shown(profiles: list[uuid.UUID]) -> None:
     secret = "cli-" + uuid.uuid4().hex
@@ -27,7 +44,7 @@ def test_credentials_are_read_from_stdin_and_never_shown(profiles: list[uuid.UUI
         input=f"{secret}\n",
     )
     assert added.exit_code == 0, added.output
-    assert secret not in added.output
+    assert secret not in plain(added.output)
 
     async def stored(session: AsyncSession) -> m.CredentialProfile | None:
         return await session.scalar(
@@ -41,15 +58,16 @@ def test_credentials_are_read_from_stdin_and_never_shown(profiles: list[uuid.UUI
 
     listed = runner.invoke(app, ["credentials", "list"])
     assert listed.exit_code == 0
-    assert "campus-ro" in listed.output
-    assert secret not in listed.output
+    assert "campus-ro" in plain(listed.output)
+    assert secret not in plain(listed.output)
 
     again = runner.invoke(
         app,
         ["credentials", "add", "campus-ro", "--username", "x", "--password-stdin"],
         input="other\n",
     )
-    assert again.exit_code == 2  # refused (Rich renders the message differently per terminal)
+    assert again.exit_code == 2
+    assert "exists (use --update to replace it)" in plain(again.output)
     unchanged = run(stored)
     assert unchanged is not None
     assert unchanged.username == "netops-ro"
@@ -84,14 +102,14 @@ def test_discover_inline_and_list_devices(profiles: list[uuid.UUID]) -> None:
         finally:
             set_target_resolver(None)
     assert result.exit_code == 0, result.output
-    assert "8 discovered" in result.output
-    assert "1 duplicate" in result.output
-    assert PASSWORD not in result.output
+    assert "8 discovered" in plain(result.output)
+    assert "1 duplicate" in plain(result.output)
+    assert PASSWORD not in plain(result.output)
 
     listed = runner.invoke(app, ["devices", "list"])
     assert listed.exit_code == 0
-    assert "11 devices" in listed.output
-    assert "out_of_scope" in listed.output
+    assert "11 devices" in plain(listed.output)
+    assert "out_of_scope" in plain(listed.output)
     one = runner.invoke(app, ["devices", "list", "--q", "FOC1111D003"])
-    assert "dist2" in one.output
-    assert "1 devices" in one.output
+    assert "dist2" in plain(one.output)
+    assert "1 devices" in plain(one.output)
