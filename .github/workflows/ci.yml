@@ -120,6 +120,20 @@ jobs:
           }
       - name: Type-check and build
         run: npm run build
+      - name: Unit and component tests (Vitest)
+        run: npm test
+      # The job keeps its name: it is a required status check of the main branch.
+      - name: Install the Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end smoke test against the Prism mock (Playwright)
+        run: npm run e2e
+      - name: Keep the Playwright report of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
 
   docker:
     name: Docker Compose build
