@@ -49,8 +49,10 @@ def test_credentials_are_read_from_stdin_and_never_shown(profiles: list[uuid.UUI
         ["credentials", "add", "campus-ro", "--username", "x", "--password-stdin"],
         input="other\n",
     )
-    assert again.exit_code != 0
-    assert "--update" in again.output
+    assert again.exit_code == 2  # refused (Rich renders the message differently per terminal)
+    unchanged = run(stored)
+    assert unchanged is not None
+    assert unchanged.username == "netops-ro"
 
 
 def test_passwords_cannot_be_given_as_arguments(profiles: list[uuid.UUID]) -> None:
