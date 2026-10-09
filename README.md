@@ -69,4 +69,9 @@ docs/       data model overview (data-model.md) and architecture decision record
 lab/        lab topologies and captured device fixtures (placeholder)
 ```
 
-Module map, conventions and hard rules for contributors: [CLAUDE.md](CLAUDE.md).
+How we work (branches, pull requests, checks, what must never be committed):
+[CONTRIBUTING.md](CONTRIBUTING.md). Module map and code conventions: [CLAUDE.md](CLAUDE.md).
+
+## License
+
+To be decided with the project advisor; no license file has been added yet.

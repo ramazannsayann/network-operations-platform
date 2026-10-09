@@ -108,6 +108,17 @@ Backend only (in `backend/`): `uv run pytest`, `uv run ruff check .`, `uv run my
 - Commits: imperative mood, short subject line (≤ 72 chars), e.g. `Add SNMP interface poller`;
   one logical change per commit. Record significant decisions as a new ADR in `docs/adr/`.
 
+## Never commit
+
+The repository is public. Never commit (not in a branch, fixture, screenshot or temporary
+commit): **real device configurations**; **the university's or any institution's IP
+addressing plan** (subnets, VLAN plans, management addresses, revealing hostnames), even
+though it uses private addresses; **pilot data** collected from the university network;
+**credentials** (passwords, enable secrets, SNMP communities/keys, tokens, private keys,
+`.env` files). Lab topologies and fixtures use made-up addressing from documentation or
+private ranges only, e.g. `10.0.0.0/8`, `192.0.2.0/24` (also `198.51.100.0/24`,
+`203.0.113.0/24`, `2001:db8::/32`), with made-up hostnames, MACs and serials.
+
 ## Hard rules
 
 - **Never commit credentials**: no passwords, SNMP communities, API keys, private keys or

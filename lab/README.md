@@ -11,9 +11,12 @@ Planned contents:
   walks, running configurations. Tests parse these files; they never connect to a device.
 - Notes on how to bring the lab up and point a local stack at it.
 
-Rules for this directory:
+Rules for this directory (see "Never commit" in CONTRIBUTING.md):
 
-- Never commit real credentials, SNMP communities, keys or production configurations.
-  Scrub captured output before committing (replace secrets, `enable secret`, `username ...
-  password`, SNMP communities, public IP addresses, hostnames that identify the institution).
+- Fixtures are captured only from our own lab (CML or the physical lab), never from the
+  university network, the pilot or any other real network.
+- Lab addressing is made up, from documentation or private ranges only (e.g. `10.0.0.0/8`,
+  `192.0.2.0/24`), with made-up hostnames; never copy an institution's IP plan.
+- Remove lab credentials from captured output before committing (`enable secret`,
+  `username ... secret`, SNMP communities and SNMPv3 keys).
 - Lab device credentials belong in a git-ignored `.env` file, never in topology files.
