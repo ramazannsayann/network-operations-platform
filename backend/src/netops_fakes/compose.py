@@ -77,6 +77,8 @@ x-fake-device: &fake-device
   build:
     context: ../backend
     target: fakelab
+    args:
+      BASE_REGISTRY: ${{BASE_REGISTRY:-docker.io}}
   image: netops-fakelab:dev
   restart: unless-stopped
   profiles: [fakelab]

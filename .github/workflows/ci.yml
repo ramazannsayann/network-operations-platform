@@ -46,8 +46,10 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       db:
-        # Keep in sync with deploy/docker-compose.yml (checked by the first step).
-        image: timescale/timescaledb:2.30.2-pg16
+        # The image of deploy/docker-compose.yml (checked by the first step), pulled through
+        # Google's Docker Hub mirror (identical digest): shared runners hit Docker Hub's
+        # anonymous pull rate limit.
+        image: mirror.gcr.io/timescale/timescaledb:2.30.2-pg16
         env:
           POSTGRES_USER: netops
           POSTGRES_PASSWORD: ci-only-throwaway
@@ -132,3 +134,12 @@ jobs:
         run: docker compose -f deploy/docker-compose.yml config --quiet
       - name: Build images
         run: docker compose -f deploy/docker-compose.yml build
+        env:
+          BASE_REGISTRY: mirror.gcr.io # same base images as Docker Hub, see backend/Dockerfile
+      - name: Build the fake lab image
+        run: >-
+          docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.fakelab.yml
+          --profile fakelab build fake-core1
+        env:
+          BASE_REGISTRY: mirror.gcr.io
+          FAKELAB_PASSWORD: build-only-not-a-secret # required by the compose file, unused here

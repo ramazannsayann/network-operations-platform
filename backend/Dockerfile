@@ -2,8 +2,13 @@
 # One image for the api, worker and scheduler services; each sets its own command.
 # The last stage (runtime) is the default target; `fakelab` builds the fake devices.
 
+# Registry of the base images: Docker Hub by default. CI pulls the same images (identical
+# digests) through mirror.gcr.io, Google's Docker Hub mirror, because shared CI runners hit
+# Docker Hub's anonymous pull rate limit.
+ARG BASE_REGISTRY=docker.io
+
 # ---- build: install locked dependencies and the netops package into /app/.venv ----
-FROM python:3.12-slim-trixie AS build
+FROM ${BASE_REGISTRY}/library/python:3.12-slim-trixie AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12.24 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -28,7 +33,7 @@ FROM build AS build-fakelab
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable --extra fakelab
 
-FROM python:3.12-slim-trixie AS fakelab
+FROM ${BASE_REGISTRY}/library/python:3.12-slim-trixie AS fakelab
 RUN groupadd --system --gid 10001 netops \
     && useradd --system --uid 10001 --gid netops --no-create-home netops
 COPY --from=build-fakelab /app/.venv /app/.venv
@@ -39,7 +44,7 @@ USER netops
 ENTRYPOINT ["python", "-m", "netops_fakes.serve"]
 
 # ---- runtime: no build tooling, runs as an unprivileged user (the default target) ----
-FROM python:3.12-slim-trixie AS runtime
+FROM ${BASE_REGISTRY}/library/python:3.12-slim-trixie AS runtime
 RUN groupadd --system --gid 10001 netops \
     && useradd --system --uid 10001 --gid netops --no-create-home netops
 WORKDIR /app

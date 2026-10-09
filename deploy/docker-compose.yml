@@ -13,6 +13,9 @@ name: netops
 x-backend: &backend
   build:
     context: ../backend
+    args:
+      # Where the base images come from (see backend/Dockerfile); CI sets mirror.gcr.io.
+      BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
   image: netops-backend:dev
   restart: unless-stopped
   environment:
@@ -128,6 +131,8 @@ services:
       context: ../frontend
       additional_contexts:
         nginx-conf: ./nginx
+      args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
     image: netops-web:dev
     restart: unless-stopped
     ports:
