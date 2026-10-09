@@ -7,10 +7,11 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from netops.api.problems import not_implemented, problems
-from netops.api.schemas.common import JobRef, JobStatus
+from netops.api.schemas.common import JobRef
 from netops.api.schemas.discovery import DiscoveryRun, DiscoveryRunCreate, DiscoveryRunPage
 from netops.api.security import AUTHENTICATED
 from netops.api.v1.common import ACCEPTED, DEFAULT_LIMIT, Limit, Offset
+from netops.db.enums import JobStatus
 
 router = APIRouter(
     prefix="/discovery/runs",

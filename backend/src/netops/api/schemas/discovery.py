@@ -7,8 +7,8 @@ from uuid import UUID
 from pydantic import AwareDatetime, Field, IPvAnyAddress, IPvAnyNetwork
 
 from netops.api.schemas import examples as ex
-from netops.api.schemas.common import ApiModel, DeviceRef, JobStatus, Page, example
-from netops.db.enums import DiscoverySource
+from netops.api.schemas.common import ApiModel, DeviceRef, Page, example
+from netops.db.enums import DiscoverySource, JobStatus
 
 
 class SkipReason(StrEnum):
