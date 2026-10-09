@@ -13,8 +13,7 @@ database password). For local development also [uv](https://docs.astral.sh/uv/) 
 Node.js 24 (≥ 22.12 works).
 
 ```bash
-make up         # creates deploy/.env on first run, then builds and starts all services
-make migrate    # applies database migrations
+make up         # creates deploy/.env on first run, builds, migrates the database, starts all services
 ```
 
 Then open:

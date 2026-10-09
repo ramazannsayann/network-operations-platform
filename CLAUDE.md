@@ -28,7 +28,7 @@ browser ──► web (nginx: static React app, proxies /api and /ws)
 | Module | Scope | Code location |
 | --- | --- | --- |
 | M1 | Discovery & topology (seed/subnet scans, CDP/LLDP, topology graph) | `backend/src/netops/discovery/` |
-| M2 | Inventory (devices, interfaces, modules, software versions) | not created yet |
+| M2 | Inventory (facts, interfaces, VLANs, ARP/MAC, routes, HSRP, STP; device detail) | `backend/src/netops/inventory/` |
 | M3 | Monitoring & alarms (SNMP/SSH polling, time-series metrics, thresholds) | `backend/src/netops/collectors/` |
 | M4 | Config management (backup, versioning, diff, compliance) | `backend/src/netops/configmgmt/` |
 | M5 | Central configuration (templated changes, dry-run, approval, rollback) | `backend/src/netops/configmgmt/` |
@@ -52,8 +52,8 @@ Run from the repo root unless noted.
 
 ```bash
 make install    # uv sync + npm ci + pre-commit install
-make up         # build and start the stack (UI on http://localhost:8080, API docs at /api/docs)
-make migrate    # alembic upgrade head inside the api container
+make up         # build, run migrations (one-shot `migrate` service), start the stack (UI on :8080)
+make migrate    # alembic upgrade head via the `migrate` service, without restarting anything
 make logs       # follow logs
 make down       # stop (keeps the db volume)
 make test       # backend pytest

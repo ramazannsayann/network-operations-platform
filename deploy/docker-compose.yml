@@ -1,7 +1,8 @@
 # NetOps platform stack for development and demos.
 #
-#   make up        build and start everything (http://localhost:8080)
-#   make migrate   apply database migrations
+#   make up        build and start everything (http://localhost:8080); migrations run
+#                  automatically through the one-shot `migrate` service
+#   make migrate   apply database migrations without restarting anything
 #   make logs      follow logs          make down   stop (data volume is kept)
 #
 # Plain compose works too: `docker compose up --build` from this directory.
@@ -31,6 +32,8 @@ x-backend: &backend
       condition: service_healthy
     redis:
       condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
 
 services:
   db:
@@ -63,6 +66,16 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # One-shot: brings the schema to the latest Alembic revision, then exits. api, worker and
+  # scheduler only start after it has exited successfully.
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
 
   api:
     <<: *backend

@@ -9,8 +9,10 @@
 We are building a centralized platform to manage, monitor and diagnose faults in Cisco
 IOS/IOS-XE campus networks, as a two-semester graduation project. The platform needs to:
 
-- talk to network devices over SSH, SNMP and later NETCONF/RESTCONF and syslog
-  (discovery, inventory, configuration backup and push);
+- talk to network devices over SSH (CLI) and SNMPv3, and receive their syslog messages
+  and SNMP traps (discovery, inventory, monitoring, configuration backup and push).
+  Model-driven management (NETCONF/RESTCONF) and streaming telemetry are out of scope;
+  the proposal lists them as future work (section 15);
 - run a lot of work on a schedule and in the background (polling hundreds of interfaces
   every few minutes, long configuration jobs), without blocking the web API;
 - store two very different kinds of data: relational data (devices, interfaces, topology
@@ -43,8 +45,9 @@ that runs the same on macOS, Windows (WSL 2) and Linux, and no cloud dependencie
 
 ## Rationale
 
-**Python.** The network-automation ecosystem lives in Python: Netmiko, Scrapli, NAPALM,
-Nornir, ncclient, pysnmp, TextFSM/ttp/Genie parsers for Cisco CLI output. Writing the
+**Python.** The network-automation ecosystem lives in Python, including the libraries the
+proposal selects (section 6.3): Nornir, NAPALM, Netmiko, TextFSM with ntc-templates for
+parsing Cisco CLI output, pysnmp and ciscoconfparse. Writing the
 backend in the same language as these libraries avoids a service boundary between "the
 app" and "the device code", and most network-automation learning material is in Python.
 3.12 is supported by all of the libraries above.
@@ -117,5 +120,5 @@ benefits of separate repositories.
 - Negative: the TimescaleDB features we plan to use (compression, continuous aggregates)
   are under the Timescale License, not an OSI licence. This is fine for an academic,
   self-hosted project but should be noted in the final report.
-- Follow-ups: decide the device-access library (Netmiko vs Scrapli vs Nornir) in M1, and
-  the authentication approach in M7, each in its own ADR.
+- Follow-ups: record the device-access design (Nornir with NAPALM/Netmiko, as chosen in
+  the proposal) in M1 and the authentication approach in M7, each in its own ADR.

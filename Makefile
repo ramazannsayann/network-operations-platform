@@ -30,8 +30,8 @@ logs: ## Follow the logs of all services
 ps: ## Show service status and health
 	$(COMPOSE) ps
 
-migrate: deploy/.env ## Apply database migrations (alembic upgrade head)
-	$(COMPOSE) run --rm api alembic upgrade head
+migrate: deploy/.env ## Apply database migrations (alembic upgrade head); `make up` also does this
+	$(COMPOSE) run --rm migrate
 
 test: ## Run the backend test suite
 	cd backend && uv run pytest
