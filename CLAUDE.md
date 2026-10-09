@@ -9,8 +9,9 @@ centralized network management, monitoring and fault-diagnosis platform for Cisc
 IOS/IOS-XE campus networks. Stack decisions and their reasons are in
 [docs/adr/0001-technology-stack.md](docs/adr/0001-technology-stack.md).
 
-Current state: repository scaffolding only (health endpoint, Celery ping task, initial
-migration that enables TimescaleDB, a health status page). Feature modules are empty.
+Current state: scaffolding (health endpoint, Celery ping task, health status page) and the
+shared data model (schema, migration, state-at-time helper, interface-name normalizer).
+Feature modules are still empty: no collectors, no API endpoints beyond /api/health.
 
 ## Architecture
 
@@ -35,15 +36,32 @@ browser ──► web (nginx: static React app, proxies /api and /ws)
 | M6 | Fault diagnosis (alarm/topology/change correlation, root-cause hints) | `backend/src/netops/diagnosis/` |
 | M7 | Security (authentication, RBAC, credential vault, audit log) | not created yet |
 
-Shared backend packages: `api/` (routers), `core/` (settings, logging, Redis client),
-`db/` (SQLAlchemy base, sessions, Alembic migrations), `workers/` (Celery app and tasks).
+Shared backend packages: `api/` (routers), `core/` (settings, logging, Redis client,
+`ifname` interface-name normalizer), `db/` (models, enums, sessions, state helper, Alembic
+migrations), `workers/` (Celery app and tasks).
+
+## Data model
+
+All modules share one schema: [docs/data-model.md](docs/data-model.md) (tables and ER
+diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
+
+- Entities (`devices`, `interfaces`, `links`, ...) have UUID ids and are updated in place.
+- Observations (`mac_entries`, `interface_snapshots`, ...) are append-only TimescaleDB
+  hypertables written by one `collection_runs` row; they subclass
+  `netops.db.models.Observation` and set `collected_at = run.started_at` (enforced by a
+  composite foreign key). Nothing may reference a hypertable.
+- State of device D for kind K at time T = latest successful run of K for D with
+  `started_at <= T`: use `netops.db.state` (`run_at`, `runs_at`, `state_at`), never ad-hoc
+  "latest row" queries.
+- Match interfaces on `name_normalized` from `netops.core.ifname.normalize`.
+- Retention periods and chunk size live only in `netops/db/timescale.py`.
 
 ## Repository layout
 
 - `backend/`: Python 3.12 package `netops` (src layout), managed with uv; tests in `backend/tests/`
 - `frontend/`: Vite + React + TypeScript (strict)
 - `deploy/`: `docker-compose.yml`, nginx config, `.env.example`
-- `docs/adr/`: architecture decision records
+- `docs/adr/`: architecture decision records; `docs/data-model.md`: schema overview
 - `lab/`: lab topologies and captured device fixtures (placeholder)
 
 ## Commands
@@ -56,7 +74,8 @@ make up         # build, run migrations (one-shot `migrate` service), start the 
 make migrate    # alembic upgrade head via the `migrate` service, without restarting anything
 make logs       # follow logs
 make down       # stop (keeps the db volume)
-make test       # backend pytest
+make test       # backend unit tests (no database or network)
+make test-integration  # integration tests against the compose db (needs `make up`)
 make lint       # ruff, ruff format --check, mypy --strict, eslint, prettier, tsc
 make format     # auto-fix formatting
 ```
@@ -76,6 +95,10 @@ Backend only (in `backend/`): `uv run pytest`, `uv run ruff check .`, `uv run my
   add new settings there with safe defaults (no default for secrets) and document them in
   the relevant `.env.example`.
 - Schema changes only through Alembic migrations; never edit a migration that has been merged.
+  Generate with autogenerate, then review: create shared enum types explicitly, add
+  `create_hypertable` / `add_retention_policy` for new hypertables, keep downgrade working.
+  The integration tests fail if models and migrations drift apart.
+- Every index gets a short comment saying which query it serves.
 - Long-running or device-facing work runs in Celery tasks, never in API request handlers.
   Tasks must be idempotent.
 - Frontend: TypeScript strict, no `any`; API calls live in `frontend/src/api/`.
@@ -87,6 +110,8 @@ Backend only (in `backend/`): `uv run pytest`, `uv run ruff check .`, `uv run my
 - **Never commit credentials**: no passwords, SNMP communities, API keys, private keys or
   real device configurations with secrets. Only `*.env.example` files with placeholders are
   committed; `.env` files are git-ignored. pre-commit runs gitleaks and detect-private-key.
-- **Tests must never connect to, or push configuration to, real devices** (or to any real
-  database or Redis). Use mocks and captured fixtures from `lab/fixtures/`. pytest runs
-  with `--disable-socket` (pytest-socket), so any network access in a test fails.
+- **Tests must never connect to, or push configuration to, real devices.** Use mocks and
+  captured fixtures from `lab/fixtures/`. pytest runs with `--disable-socket`
+  (pytest-socket), so unit tests cannot open any network connection. Only tests marked
+  `@pytest.mark.integration` may connect, and only to 127.0.0.1 / ::1 (the compose
+  database, in a separate `*_test` database that they recreate).

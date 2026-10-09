@@ -35,7 +35,8 @@ All ports are bound to `127.0.0.1`: web `8080`, api `8000`, PostgreSQL `5433`, R
 ```bash
 make install    # backend venv (uv sync), frontend node_modules (npm ci), git pre-commit hooks
 make lint       # ruff, mypy --strict, eslint, prettier, tsc
-make test       # backend tests (no database, Redis or network needed)
+make test       # backend unit tests (no database, Redis or network needed)
+make test-integration  # schema and query tests against the compose database (after `make up`)
 ```
 
 Run parts of the stack outside Docker:
@@ -58,7 +59,7 @@ New migration: `cd backend && uv run alembic revision --autogenerate -m "add dev
 backend/    FastAPI app, Celery workers, Alembic migrations (Python package `netops`)
 frontend/   React + TypeScript (Vite) single-page app
 deploy/     docker-compose.yml, nginx config, .env.example
-docs/adr/   architecture decision records (start with ADR-0001)
+docs/       data model overview (data-model.md) and architecture decision records (adr/)
 lab/        lab topologies and captured device fixtures (placeholder)
 ```
 
