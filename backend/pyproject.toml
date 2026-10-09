@@ -56,6 +56,8 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"] # assert is how pytest works
+# Migrations are generated; long SQL strings in constraints are clearer unwrapped.
+"src/netops/db/migrations/versions/*" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
