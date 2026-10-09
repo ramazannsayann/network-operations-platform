@@ -84,6 +84,29 @@ switch neighbour farther from the core is `distribution`, otherwise `access`; de
 discovery does not crawl stay `unknown`. `devices.role_is_manual` keeps a role an operator
 set (the API to set it comes with the topology/inventory editing work).
 
+### Topology API (step 7)
+
+- `GET /topology?layer=l2`: every device (placeholders included, flagged by
+  `management_status` and `out_of_scope`) and the active links; links between members of
+  the same two port-channels are collapsed into one `etherchannel` edge with a `members`
+  list (members not seen while another one is are listed with `is_active: false`).
+- `layer=l3`: L3 devices (routers, L3 switches), one node per subnet of their addresses
+  (no /32 or /128), and an edge per device address in a subnet, with the device's HSRP state
+  there; subnet nodes list their HSRP virtual gateways. An L3 device without collected
+  addresses (a provider router out of scope) joins the subnet its management address is in.
+- `at`: devices first seen by then; links reported by the neighbours runs in force at `at`
+  (the same matching as `rebuild_links`, `links_reported_at`); addresses seen by the
+  interfaces runs in force; HSRP from the HSRP runs in force (all via `netops.db.state`).
+  Device identities and management statuses are today's.
+- `GET /topology/changes`: added devices and links by `first_seen_at`; a removal is dated at
+  the first successful discovery run after the thing was last seen (drift is detected by
+  discovery). **Limitation:** devices and links keep one row each, so something that
+  disappears and comes back shows only its latest state; its earlier absence is not in the
+  history.
+- `GET/PUT /topology/layout`: saved node positions per layer in `topology_positions`, one
+  global layout until M7 adds users. Node ids are device ids or (L3) subnet prefixes, so
+  the table has a `node_id` besides the nullable `device_id`.
+
 ### API and CLI
 
 The endpoints listed in step 6 are implemented; the contract changed additively:
@@ -125,7 +148,7 @@ passwords only from a hidden prompt or stdin, never from arguments.
 
 - Subnet sweeps and ARP-based discovery (seed/CDP/LLDP only for now), SNMP-based
   identification (M3), IPv6 management addresses beyond what the parsers already accept.
-- Topology endpoints and the map (next step); an API to override roles.
+- An API to override roles (`devices.role_is_manual` is ready for it); per-user layouts (M7).
 - Merging two existing device rows that turn out to be one chassis (discovery now prevents
   them; older data would need a one-off merge).
 - Trust-on-first-use host keys (ADR-0004).
