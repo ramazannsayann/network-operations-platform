@@ -18,6 +18,7 @@ erDiagram
     locations |o--o{ locations : "parent of"
     locations |o--o{ devices : "contains"
     devices ||--o{ device_serials : "identified by"
+    credential_profiles |o--o{ devices : "logs in to"
     devices ||--o{ interfaces : "has"
     interfaces |o--o{ interfaces : "port-channel of"
     interfaces ||--o{ interface_addresses : "configured with"
@@ -42,7 +43,15 @@ erDiagram
         bool is_managed
         reachability reachability
         discovery_source discovered_via
+        uuid credential_profile_id FK
         timestamptz last_seen_at
+    }
+    credential_profiles {
+        uuid id PK
+        text name UK
+        credential_kind kind "ssh or snmpv3"
+        text username
+        bytea password_encrypted "Fernet"
     }
     device_serials {
         text serial PK
@@ -222,6 +231,7 @@ erDiagram
 | `locations` | Places devices live in (campus > building > floor), maintained by users. |
 | `devices` | One logical device (a stack or VSS pair is one), with type, role, OS, location and reachability. |
 | `device_serials` | Chassis serial numbers → device; the de-duplication key for discovery. |
+| `credential_profiles` | Named SSH / SNMPv3 credentials; secrets Fernet-encrypted ([ADR-0004](adr/0004-credentials-and-device-access.md)). |
 | `interfaces` | Device interfaces by normalized name, with port-channel membership and the latest known state. |
 | `interface_addresses` | IP addresses (with prefix) configured on interfaces; used for subnet → gateway lookups. |
 | `links` | Physical links between two interfaces, stored once (a < b), from CDP/LLDP, inference or manual entry. |
@@ -251,6 +261,9 @@ erDiagram
 
 Run kinds `facts` and `config` write no observation table: `facts` updates `devices` and
 `device_serials`; `config` writes `config_versions` when the configuration changed.
+
+Which commands each kind runs, and which of them are required, is defined in
+`backend/src/netops/inventory/collectors.py`.
 
 ### Names used in the proposal
 

@@ -12,9 +12,10 @@ IOS/IOS-XE campus networks. The design reference document is the project proposa
 decisions and their reasons are in
 [docs/adr/0001-technology-stack.md](docs/adr/0001-technology-stack.md).
 
-Current state: scaffolding (health endpoint, Celery ping task, health status page) and the
-shared data model (schema, migration, state-at-time helper, interface-name normalizer).
-Feature modules are still empty: no collectors, no API endpoints beyond /api/health.
+Current state: scaffolding, the shared data model, the v1 API contract (stubs answering
+501), encrypted credential profiles, the read-only SSH layer, parsers for 16 IOS/IOS-XE
+show commands and the M2 collectors (`collect_device` Celery task). No discovery BFS, SNMP
+polling, config management or UI screens yet.
 
 ## Architecture
 
@@ -32,16 +33,18 @@ browser ──► web (nginx: static React app, proxies /api and /ws)
 | Module | Scope | Code location |
 | --- | --- | --- |
 | M1 | Discovery & topology (seed/subnet scans, CDP/LLDP, topology graph) | `backend/src/netops/discovery/` |
-| M2 | Inventory (facts, interfaces, VLANs, ARP/MAC, routes, HSRP, STP; device detail) | `backend/src/netops/inventory/` |
+| M2 | Inventory (facts, interfaces, VLANs, ARP/MAC, routes, HSRP, STP; device detail) | `backend/src/netops/inventory/` (collectors, `collect_device` task) |
 | M3 | Monitoring & alarms (SNMP/SSH polling, time-series metrics, thresholds) | `backend/src/netops/collectors/` |
 | M4 | Config management (backup, versioning, diff, compliance) | `backend/src/netops/configmgmt/` |
 | M5 | Central configuration (templated changes, dry-run, approval, rollback) | `backend/src/netops/configmgmt/` |
 | M6 | Fault diagnosis (alarm/topology/change correlation, root-cause hints) | `backend/src/netops/diagnosis/` |
-| M7 | Security (authentication, RBAC, credential vault, audit log) | not created yet |
+| M7 | Security (authentication, RBAC, credential vault, audit log) | credential profiles only: `db/models/credentials.py`, `core/crypto.py` |
 
 Shared backend packages: `api/` (routers), `core/` (settings, logging, Redis client,
-`ifname` interface-name normalizer), `db/` (models, enums, sessions, state helper, Alembic
-migrations), `workers/` (Celery app and tasks).
+`ifname` interface-name normalizer, `secrets`/`crypto` for credentials), `db/` (models,
+enums, sessions, state helper, Alembic migrations), `netaccess/` (read-only SSH: Nornir +
+Netmiko behind the command guard), `parsing/` (TextFSM parsers -> dataclasses),
+`workers/` (Celery app and tasks).
 
 ## Data model
 
@@ -74,6 +77,22 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
   and `frontend/src/api/schema.d.ts`; never edit them by hand.
 - Frontend code calls the API only through the typed client in `frontend/src/api/client.ts`.
 
+## Device access and credentials (ADR-0004)
+
+- Talk to devices only through `netops.netaccess.run_show`; every command passes the
+  read-only guard (`show ...`, `terminal length 0`, `terminal width N`). There is no
+  config path; M5 adds a separate one. Never call Netmiko or Nornir directly elsewhere.
+- Collectors live in `netops/inventory/collectors.py` (commands per kind, required ones,
+  persist function); storage goes through `netops/inventory/persistence.py`, which also
+  replays recorded output (`ingest_raw`) for tests.
+- Parsers (`netops/parsing`) return dataclasses with canonical interface names, MACs, IPs
+  and expanded VLAN lists. Every parser has fixtures in `lab/fixtures/` (provenance in
+  `lab/fixtures/README.md`) and tests in `backend/tests/test_parsing.py`.
+- Secrets are `netops.core.secrets.Secret` objects; unwrap them only where they are used,
+  never log them, and `redact()` error text that might contain one. Stored secrets are
+  Fernet-encrypted with `CREDENTIALS_KEY` (generated into `deploy/.env` by `make up`).
+- Create database engines with `netops.db.session.create_engine` (inet values as strings).
+
 ## Repository layout
 
 - `backend/`: Python 3.12 package `netops` (src layout), managed with uv; tests in `backend/tests/`
@@ -88,6 +107,7 @@ Run from the repo root unless noted.
 
 ```bash
 make install    # uv sync + npm ci + pre-commit install
+make env        # create deploy/.env (DB password, CREDENTIALS_KEY) or add a missing key
 make up         # build, run migrations (one-shot `migrate` service), start the stack (UI on :8080)
 make migrate    # alembic upgrade head via the `migrate` service, without restarting anything
 make logs       # follow logs
@@ -141,8 +161,11 @@ private ranges only, e.g. `10.0.0.0/8`, `192.0.2.0/24` (also `198.51.100.0/24`,
 - **Never commit credentials**: no passwords, SNMP communities, API keys, private keys or
   real device configurations with secrets. Only `*.env.example` files with placeholders are
   committed; `.env` files are git-ignored. pre-commit runs gitleaks and detect-private-key.
+- **Never weaken the read-only guard** or add a way to send configuration outside M5's
+  (future) audited write path.
 - **Tests must never connect to, or push configuration to, real devices.** Use mocks and
   captured fixtures from `lab/fixtures/`. pytest runs with `--disable-socket`
   (pytest-socket), so unit tests cannot open any network connection. Only tests marked
   `@pytest.mark.integration` may connect, and only to 127.0.0.1 / ::1 (the compose
-  database, in a separate `*_test` database that they recreate).
+  database, in a separate `*_test` database that they recreate, and the fake SSH device in
+  `backend/tests/fakes/`).
