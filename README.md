@@ -3,6 +3,9 @@
 Centralized network management, monitoring and fault-diagnosis platform for Cisco
 IOS/IOS-XE campus networks. Graduation project.
 
+Design reference: the project proposal,
+[docs/proposal/proposal-v2.pdf](docs/proposal/proposal-v2.pdf) (in Turkish).
+
 > Status: repository scaffolding. The stack runs end to end (UI → nginx → API → TimescaleDB
 > and Redis, plus Celery workers), but no network features are implemented yet.
 
@@ -26,6 +29,9 @@ Then open:
 `make logs` follows the logs and `make down` stops everything (the database volume is
 kept). Without Make: `cp deploy/.env.example deploy/.env`, set `POSTGRES_PASSWORD`, then
 `cd deploy && docker compose up --build`.
+
+TimescaleDB telemetry is turned off (`TIMESCALEDB_TELEMETRY=off`): the platform runs inside
+an institution's network and must not send data out.
 
 All ports are bound to `127.0.0.1`: web `8080`, api `8000`, PostgreSQL `5433`, Redis
 `6379`. Change them in `deploy/.env`.

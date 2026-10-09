@@ -40,10 +40,15 @@ services:
     # Exact tag on purpose: TimescaleDB upgrades need ALTER EXTENSION, so bump deliberately.
     image: timescale/timescaledb:2.30.2-pg16
     restart: unless-stopped
+    # No telemetry: the platform runs inside an institution's network and must not send
+    # data out. The variable is applied when the volume is first initialised; the -c flag
+    # also covers databases created before it was added.
+    command: ["postgres", "-c", "timescaledb.telemetry_level=off"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in deploy/.env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
+      TIMESCALEDB_TELEMETRY: "off"
     volumes:
       - db-data:/var/lib/postgresql/data
     ports:

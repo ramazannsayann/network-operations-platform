@@ -6,7 +6,10 @@ Guidance for Claude Code (and humans) working in this repository.
 
 NetOps Platform is a university graduation project (4-person team, two semesters): a
 centralized network management, monitoring and fault-diagnosis platform for Cisco
-IOS/IOS-XE campus networks. Stack decisions and their reasons are in
+IOS/IOS-XE campus networks. The design reference document is the project proposal,
+[docs/proposal/proposal-v2.pdf](docs/proposal/proposal-v2.pdf) (Turkish): requirements
+(section 5), architecture and data model (section 6), module designs (section 7). Stack
+decisions and their reasons are in
 [docs/adr/0001-technology-stack.md](docs/adr/0001-technology-stack.md).
 
 Current state: scaffolding (health endpoint, Celery ping task, health status page) and the

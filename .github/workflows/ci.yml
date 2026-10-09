@@ -50,6 +50,8 @@ jobs:
           POSTGRES_USER: netops
           POSTGRES_PASSWORD: ci-only-throwaway
           POSTGRES_DB: netops
+          # Same as docker-compose: never send telemetry out.
+          TIMESCALEDB_TELEMETRY: "off"
         ports:
           - 5432:5432
         options: >-
