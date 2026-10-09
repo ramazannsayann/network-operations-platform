@@ -25,6 +25,7 @@ from netops.core.secrets import Secret
 from netops.core.settings import Settings
 from netops.db.enums import CredentialKind, OsFamily
 from netops.db.models import CredentialProfile, Device
+from netops.netaccess.target import TargetResolver, resolve_target
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ class DeviceAccess:
 
 
 def device_access(device: Device, profile: CredentialProfile | None, port: int) -> DeviceAccess:
+    """``port`` is the global SSH_PORT, used unless the device has a port of its own."""
     label = device.hostname or str(device.mgmt_ip or device.id)
     if device.mgmt_ip is None:
         raise DeviceAccessError(f"{label}: no management address")
@@ -78,7 +80,7 @@ def device_access(device: Device, profile: CredentialProfile | None, port: int) 
         device_id=device.id,
         name=label,
         host=str(device.mgmt_ip),
-        port=port,
+        port=device.ssh_port or port,
         platform=platform,
         username=profile.username,
         password=profile.password,
@@ -131,14 +133,23 @@ def netmiko_options(access: DeviceAccess, settings: Settings) -> dict[str, Any]:
     return options
 
 
-def build_nornir(accesses: Sequence[DeviceAccess], settings: Settings) -> Nornir:
-    """A Nornir object for these devices; secrets are unwrapped only into its hosts."""
+def build_nornir(
+    accesses: Sequence[DeviceAccess],
+    settings: Settings,
+    resolve: TargetResolver = resolve_target,
+) -> Nornir:
+    """A Nornir object for these devices; secrets are unwrapped only into its hosts.
+
+    ``resolve`` maps each device's address to the socket address actually connected to
+    (identity in production, see netops.netaccess.target).
+    """
+    targets = {access.device_id: resolve(access.host, access.port) for access in accesses}
     hosts = Hosts(
         {
             str(access.device_id): Host(
                 name=str(access.device_id),
-                hostname=access.host,
-                port=access.port,
+                hostname=targets[access.device_id][0],
+                port=targets[access.device_id][1],
                 username=access.username,
                 password=access.password.get_secret_value(),
                 platform=access.platform,

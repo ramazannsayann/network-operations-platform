@@ -9,7 +9,16 @@ import pytest
 
 from netops.core.secrets import Secret
 from netops.core.settings import get_settings
-from netops.netaccess import DeviceAccess, ReadOnlyCommandError, check_read_only, run_show, runner
+from netops.db import models as m
+from netops.db.enums import CredentialKind, OsFamily
+from netops.netaccess import (
+    DeviceAccess,
+    ReadOnlyCommandError,
+    check_read_only,
+    run_show,
+    runner,
+    target,
+)
 from netops.netaccess import inventory as access_inventory
 from netops.netaccess.guard import check_all
 
@@ -146,3 +155,35 @@ def test_nornir_inventory_is_built_without_a_log_file(tmp_path: Path) -> None:
     assert (host.hostname, host.port, host.platform) == ("192.0.2.10", 22, "cisco_xe")
     assert nornir.config.logging.enabled is False
     assert not Path("nornir.log").exists()
+
+
+def test_the_resolver_changes_only_where_a_session_connects() -> None:
+    access = _access()
+    seen = []
+
+    def to_loopback(host: str, port: int) -> tuple[str, int]:
+        seen.append((host, port))
+        return "127.0.0.1", 10022
+
+    target.set_target_resolver(to_loopback)
+    try:
+        nornir = access_inventory.build_nornir([access], get_settings())
+    finally:
+        target.set_target_resolver(None)
+    host = next(iter(nornir.inventory.hosts.values()))
+    assert (host.hostname, host.port) == ("127.0.0.1", 10022)
+    assert seen == [("192.0.2.10", 22)]
+    assert access.host == "192.0.2.10"  # everything else keeps the management address
+    assert target.resolve_target("192.0.2.10", 22) == ("192.0.2.10", 22)  # identity again
+
+
+def test_device_ssh_port_overrides_the_global_port() -> None:
+    profile = m.CredentialProfile(
+        name="lab", kind=CredentialKind.SSH, username="netops-ro", password=Secret(PASSWORD)
+    )
+    device = m.Device(
+        id=uuid.uuid4(), mgmt_ip="192.0.2.10", os_family=OsFamily.IOSXE, ssh_port=None
+    )
+    assert access_inventory.device_access(device, profile, 22).port == 22
+    device.ssh_port = 2222
+    assert access_inventory.device_access(device, profile, 22).port == 2222
