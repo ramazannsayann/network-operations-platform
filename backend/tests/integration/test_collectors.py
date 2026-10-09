@@ -34,7 +34,7 @@ from netops.inventory.locks import try_lock_device
 from netops.inventory.persistence import ingest_raw
 from netops.inventory.tasks import collect_device
 from netops.netaccess import ReadOnlyCommandError, load_device_access, run_show
-from tests.fakes.fakedevice import FakeCiscoDevice, load_outputs
+from netops_fakes.device import FakeCiscoDevice, load_outputs
 
 pytestmark = pytest.mark.integration
 

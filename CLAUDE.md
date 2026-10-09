@@ -167,5 +167,5 @@ private ranges only, e.g. `10.0.0.0/8`, `192.0.2.0/24` (also `198.51.100.0/24`,
   captured fixtures from `lab/fixtures/`. pytest runs with `--disable-socket`
   (pytest-socket), so unit tests cannot open any network connection. Only tests marked
   `@pytest.mark.integration` may connect, and only to 127.0.0.1 / ::1 (the compose
-  database, in a separate `*_test` database that they recreate, and the fake SSH device in
-  `backend/tests/fakes/`).
+  database, in a separate `*_test` database that they recreate, and the fake SSH devices
+  from `netops_fakes`, which listen on 127.0.0.1).

@@ -742,6 +742,11 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
+[package.optional-dependencies]
+fakelab = [
+    { name = "asyncssh" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "asyncssh" },
@@ -760,6 +765,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "asyncpg", specifier = ">=0.32.0" },
+    { name = "asyncssh", marker = "extra == 'fakelab'", specifier = ">=2.24.1" },
     { name = "celery", extras = ["redis"], specifier = ">=5.6.3" },
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastapi", specifier = ">=0.143.0" },
@@ -774,6 +780,7 @@ requires-dist = [
     { name = "textfsm", specifier = ">=2.1.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
+provides-extras = ["fakelab"]
 
 [package.metadata.requires-dev]
 dev = [
