@@ -5,6 +5,7 @@ import secrets
 import uuid
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -20,6 +21,17 @@ FAKELAB_TOPOLOGY = Path(__file__).resolve().parents[3] / "lab" / "fakelab" / "to
 USERNAME = "netops-ro"
 PASSWORD = "pw-" + secrets.token_hex(8)  # random per run: no password literal in the repo
 OUTDATED = "pw-" + secrets.token_hex(8)  # a profile tried first that no device accepts
+FAKELAB_REQUEST = {"seeds": ["10.255.0.2"], "allowed_subnets": ["10.255.0.0/24"]}
+
+
+class Recorder:
+    """Stands in for the Celery task queue (netops.api.v1.common.get_task_queue)."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[Any, ...]]] = []
+
+    def __call__(self, task: str, *args: Any) -> None:
+        self.calls.append((task, args))
 
 
 def run[T](make: Callable[[AsyncSession], Awaitable[T]]) -> T:
