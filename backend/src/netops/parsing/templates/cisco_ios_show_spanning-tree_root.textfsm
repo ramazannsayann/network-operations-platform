@@ -1,0 +1,24 @@
+Value Required VLAN_ID (\d+)
+Value ROOT_PRIORITY (\d+)
+Value ROOT_ADDRESS ([0-9a-fA-F.]+)
+Value ROOT_COST (\d+)
+Value ROOT_PORT (\S+)
+Value IS_ROOT (This bridge is the root)
+Value BRIDGE_PRIORITY (\d+)
+Value BRIDGE_ADDRESS ([0-9a-fA-F.]+)
+
+# Root and bridge identity per VLAN (PVST+ / Rapid-PVST+); the per-port table is parsed
+# by the ntc-templates cisco_ios_show_spanning-tree template.
+Start
+  ^VLAN0*${VLAN_ID}\s*$$ -> RootId
+
+RootId
+  ^\s+Root ID\s+Priority\s+${ROOT_PRIORITY}
+  ^\s+Address\s+${ROOT_ADDRESS}
+  ^\s+${IS_ROOT}
+  ^\s+Cost\s+${ROOT_COST}
+  ^\s+Port\s+\d+\s+\(${ROOT_PORT}\)
+  ^\s+Bridge ID\s+Priority\s+${BRIDGE_PRIORITY} -> BridgeId
+
+BridgeId
+  ^\s+Address\s+${BRIDGE_ADDRESS} -> Record Start

@@ -6,6 +6,7 @@ Start a worker with ``celery -A netops.workers.celery_app:celery_app worker``.
 from typing import Any
 
 from celery import Celery, signals
+from celery.schedules import crontab
 
 from netops.core.logging import configure_logging
 from netops.core.settings import get_settings
@@ -16,7 +17,7 @@ celery_app = Celery(
     "netops",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["netops.workers.tasks"],
+    include=["netops.workers.tasks", "netops.inventory.tasks"],
 )
 celery_app.conf.update(
     task_serializer="json",
@@ -26,8 +27,13 @@ celery_app.conf.update(
     enable_utc=True,
     result_expires=3600,
     broker_connection_retry_on_startup=True,
-    # Periodic jobs (e.g. M3 polling) will be registered here and run by `celery beat`.
-    beat_schedule={},
+    # Periodic jobs, run by `celery beat` (the scheduler service).
+    beat_schedule={
+        "cleanup-collection-runs": {
+            "task": "netops.cleanup_collection_runs",
+            "schedule": crontab(hour=3, minute=17),
+        },
+    },
 )
 
 

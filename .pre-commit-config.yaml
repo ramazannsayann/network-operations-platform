@@ -4,8 +4,11 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # Device output fixtures keep their trailing spaces and endings exactly as captured.
       - id: trailing-whitespace
+        exclude: ^lab/fixtures/
       - id: end-of-file-fixer
+        exclude: ^lab/fixtures/
       - id: check-yaml
       - id: check-toml
       - id: check-json

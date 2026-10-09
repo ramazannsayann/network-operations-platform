@@ -61,6 +61,8 @@ class Device(EntityMixin, SeenMixin, Base):
         Index("ix_devices_hostname", "hostname"),
         # Devices of a location; also used when a location is deleted (SET NULL).
         Index("ix_devices_location_id", "location_id"),
+        # Devices using a credential profile (and the RESTRICT check when deleting one).
+        Index("ix_devices_credential_profile_id", "credential_profile_id"),
     )
 
     # NULL until known: devices inferred from ARP have only an address at first.
@@ -89,6 +91,10 @@ class Device(EntityMixin, SeenMixin, Base):
     )
     discovered_via: Mapped[DiscoverySource]
     last_polled_at: Mapped[datetime | None]
+    # SSH credentials used to collect from the device; a profile in use cannot be deleted.
+    credential_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("credential_profiles.id", ondelete="RESTRICT")
+    )
 
 
 class DeviceSerial(SeenMixin, Base):

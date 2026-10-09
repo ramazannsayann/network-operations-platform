@@ -7,10 +7,16 @@ dependencies = [
     "alembic>=1.20.0",
     "asyncpg>=0.32.0",
     "celery[redis]>=5.6.3",
+    "cryptography>=50.0.2",
     "fastapi>=0.143.0",
+    "netmiko>=4.8.0",
+    "nornir>=3.6.0",
+    "nornir-netmiko>=1.0.1",
+    "ntc-templates>=9.3.0",
     "pydantic-settings>=2.15.0",
     "redis>=6.4.0",
     "sqlalchemy[asyncio]>=2.1.4",
+    "textfsm>=2.1.0",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -20,6 +26,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "asyncssh>=2.24.1",
     "celery-types>=0.26.0",
     "httpx2>=2.13.1",
     "mypy>=2.4.0",
@@ -66,6 +73,11 @@ strict = true
 warn_unreachable = true
 files = ["src/netops"]
 plugins = ["pydantic.mypy"]
+
+# Libraries without type information; their results are typed where netops uses them.
+[[tool.mypy.overrides]]
+module = ["textfsm", "ntc_templates.*", "nornir_netmiko.*", "paramiko.*"]
+ignore_missing_imports = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

@@ -1,0 +1,28 @@
+NAME: "c93xx Stack", DESCR: "c93xx Stack"
+PID: C9300-48P         , VID: V02  , SN: FOC0000X0A1
+
+NAME: "Switch 1", DESCR: "C9300-48P"
+PID: C9300-48P         , VID: V02  , SN: FOC0000X0A1
+
+NAME: "Switch 1 - Power Supply A", DESCR: "Switch 1 - Power Supply A"
+PID: PWR-C1-715WAC     , VID: V02  , SN: LIT0000P0A1
+
+NAME: "Switch 1 FRU Uplink Module 1", DESCR: "8x10G Uplink Module"
+PID: C9300-NM-8X       , VID: V02  , SN: FOC0000N0A1
+
+NAME: "Te1/1/1", DESCR: "SFP-10GBase-SR"
+PID: SFP-10G-SR          , VID: V03  , SN: AVD0000S0A1
+
+NAME: "Switch 2", DESCR: "C9300-48P"
+PID: C9300-48P         , VID: V02  , SN: FOC0000X0B2
+
+NAME: "Switch 2 - Power Supply A", DESCR: "Switch 2 - Power Supply A"
+PID: PWR-C1-715WAC     , VID: V02  , SN: LIT0000P0B2
+
+NAME: "Switch 2 FRU Uplink Module 1", DESCR: "8x10G Uplink Module"
+PID: C9300-NM-8X       , VID: V02  , SN: FOC0000N0B2
+
+NAME: "Te2/1/1", DESCR: "SFP-10GBase-SR"
+PID: SFP-10G-SR          , VID: V03  , SN: AVD0000S0B2
+
+

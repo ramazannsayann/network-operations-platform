@@ -7,6 +7,7 @@ autogenerate and the schema tests rely on.
 from netops.db.models._common import Observation
 from netops.db.models.collection import CollectionRun
 from netops.db.models.configuration import ConfigChange, ConfigVersion
+from netops.db.models.credentials import CredentialProfile
 from netops.db.models.diagnosis import Finding
 from netops.db.models.inventory import Device, DeviceSerial, Interface, InterfaceAddress, Location
 from netops.db.models.monitoring import Alarm, Event, Incident, Metric
@@ -30,6 +31,7 @@ __all__ = [
     "CollectionRun",
     "ConfigChange",
     "ConfigVersion",
+    "CredentialProfile",
     "Device",
     "DeviceSerial",
     "Event",

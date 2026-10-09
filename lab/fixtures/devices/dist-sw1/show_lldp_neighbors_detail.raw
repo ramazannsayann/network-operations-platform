@@ -1,0 +1,26 @@
+------------------------------------------------
+Local Intf: Gi1/0/5
+Chassis id: 70db.9800.0021
+Port id: Gi0
+Port Description: GigabitEthernet0
+System Name: ap-b2-01
+
+System Description: 
+Cisco AP Software, C9120AXI-E Version: 17.9.4
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2023 by Cisco Systems, Inc.
+
+Time remaining: 104 seconds
+System Capabilities: B,R
+Enabled Capabilities: B
+Management Addresses:
+    IP: 10.0.30.21
+Auto Negotiation - supported, enabled
+Physical media capabilities:
+    1000baseT(FD)
+    100base-TX(FD)
+Media Attachment Unit type: 30
+Vlan ID: - not advertised
+
+
+Total entries displayed: 1

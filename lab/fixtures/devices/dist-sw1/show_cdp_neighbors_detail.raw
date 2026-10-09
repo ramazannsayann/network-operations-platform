@@ -1,0 +1,66 @@
+-------------------------
+Device ID: core-sw-1.lab.example.net
+Entry address(es): 
+  IP address: 10.0.0.1
+Platform: cisco C9500-24Y4C,  Capabilities: Router Switch IGMP 
+Interface: TenGigabitEthernet1/1/1,  Port ID (outgoing port): TenGigabitEthernet1/0/1
+Holdtime : 151 sec
+
+Version :
+Cisco IOS Software [Dublin], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.12.4, RELEASE SOFTWARE (fc1)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2024 by Cisco Systems, Inc.
+Compiled Thu 12-Sep-24 10:11 by mcpre
+
+advertisement version: 2
+VTP Management Domain: ''
+Native VLAN: 99
+Duplex: full
+Management address(es): 
+  IP address: 10.0.0.1
+
+-------------------------
+Device ID: core-sw-1.lab.example.net
+Entry address(es): 
+  IP address: 10.0.0.1
+Platform: cisco C9500-24Y4C,  Capabilities: Router Switch IGMP 
+Interface: TenGigabitEthernet2/1/1,  Port ID (outgoing port): TenGigabitEthernet2/0/1
+Holdtime : 151 sec
+
+Version :
+Cisco IOS Software [Dublin], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.12.4, RELEASE SOFTWARE (fc1)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2024 by Cisco Systems, Inc.
+Compiled Thu 12-Sep-24 10:11 by mcpre
+
+advertisement version: 2
+VTP Management Domain: ''
+Native VLAN: 99
+Duplex: full
+Management address(es): 
+  IP address: 10.0.0.1
+
+-------------------------
+Device ID: sw-b2-03.lab.example.net
+Entry address(es): 
+  IP address: 10.0.0.23
+Platform: cisco WS-C2960X-48FPD-L,  Capabilities: Switch IGMP 
+Interface: GigabitEthernet1/0/3,  Port ID (outgoing port): GigabitEthernet1/0/49
+Holdtime : 172 sec
+
+Version :
+Cisco IOS Software, C2960X Software (C2960X-UNIVERSALK9-M), Version 15.2(7)E10, RELEASE SOFTWARE (fc1)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2024 by Cisco Systems, Inc.
+Compiled Mon 22-Apr-24 14:52 by mcpre
+
+advertisement version: 2
+Protocol Hello:  OUI=0x00000C, Protocol ID=0x0112; payload len=27, value=00000000FFFFFFFF010221FF000000000000701F534A1080FF0000
+VTP Management Domain: ''
+Native VLAN: 99
+Duplex: full
+Management address(es): 
+  IP address: 10.0.0.23
+
+
+Total cdp entries displayed : 3

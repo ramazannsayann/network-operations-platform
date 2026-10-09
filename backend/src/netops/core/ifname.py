@@ -11,6 +11,8 @@ Names whose type is not recognised are returned unchanged apart from whitespace.
 import re
 from typing import Final
 
+from netops.db.enums import InterfaceKind
+
 # Canonical type names as IOS/IOS-XE print them, with other full spellings seen in the wild.
 _TYPES: Final[dict[str, tuple[str, ...]]] = {
     "Ethernet": (),
@@ -92,3 +94,34 @@ def normalize(name: str) -> str:
         return stripped
     canonical = _canonical_type(match["type"])
     return f"{canonical or match['type']}{match['number']}"
+
+
+_KIND_BY_TYPE: Final[dict[str, InterfaceKind]] = {
+    "Port-channel": InterfaceKind.PORT_CHANNEL,
+    "Vlan": InterfaceKind.SVI,
+    "BDI": InterfaceKind.SVI,
+    "Loopback": InterfaceKind.LOOPBACK,
+    "Tunnel": InterfaceKind.TUNNEL,
+    "Ethernet": InterfaceKind.PHYSICAL,
+    "FastEthernet": InterfaceKind.PHYSICAL,
+    "GigabitEthernet": InterfaceKind.PHYSICAL,
+    "TwoGigabitEthernet": InterfaceKind.PHYSICAL,
+    "FiveGigabitEthernet": InterfaceKind.PHYSICAL,
+    "TenGigabitEthernet": InterfaceKind.PHYSICAL,
+    "TwentyFiveGigE": InterfaceKind.PHYSICAL,
+    "FortyGigabitEthernet": InterfaceKind.PHYSICAL,
+    "HundredGigE": InterfaceKind.PHYSICAL,
+    "Serial": InterfaceKind.PHYSICAL,
+    "Cellular": InterfaceKind.PHYSICAL,
+}
+
+
+def interface_kind(name: str) -> InterfaceKind:
+    """Best guess of an interface's kind from its name (subinterfaces count as ``other``)."""
+    canonical = normalize(name)
+    if canonical.lower().startswith(("mgmt", "management")):
+        return InterfaceKind.MANAGEMENT
+    match = _NAME_RE.fullmatch(canonical)
+    if match is None or "." in match["number"]:
+        return InterfaceKind.OTHER
+    return _KIND_BY_TYPE.get(match["type"], InterfaceKind.OTHER)

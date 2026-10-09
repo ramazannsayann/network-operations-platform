@@ -19,6 +19,10 @@ Node.js 24 (≥ 22.12 works).
 make up         # creates deploy/.env on first run, builds, migrates the database, starts all services
 ```
 
+`deploy/.env` gets a random database password and a random `CREDENTIALS_KEY`, which encrypts
+the device credentials stored in the database. Keep a copy of that key outside the database
+backups ([ADR-0004](docs/adr/0004-credentials-and-device-access.md)).
+
 Then open:
 
 - UI: <http://localhost:8080> (shows database and Redis status)
