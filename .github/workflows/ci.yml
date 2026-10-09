@@ -39,6 +39,47 @@ jobs:
       - name: Test
         run: uv run pytest
 
+  backend-integration:
+    name: Backend integration (TimescaleDB)
+    runs-on: ubuntu-latest
+    services:
+      db:
+        # Keep in sync with deploy/docker-compose.yml (checked by the first step).
+        image: timescale/timescaledb:2.30.2-pg16
+        env:
+          POSTGRES_USER: netops
+          POSTGRES_PASSWORD: ci-only-throwaway
+          POSTGRES_DB: netops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U netops -d netops"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_POSTGRES_HOST: 127.0.0.1
+      TEST_POSTGRES_PORT: "5432"
+      TEST_POSTGRES_USER: netops
+      TEST_POSTGRES_PASSWORD: ci-only-throwaway
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check the service image matches docker-compose
+        run: |
+          grep -q 'image: timescale/timescaledb:2.30.2-pg16' ../deploy/docker-compose.yml
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version-file: backend/pyproject.toml
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Integration tests
+        run: uv run pytest -m integration
+
   frontend:
     name: Frontend (eslint, prettier, build)
     runs-on: ubuntu-latest

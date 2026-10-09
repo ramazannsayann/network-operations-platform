@@ -3,7 +3,7 @@
 COMPOSE := docker compose -f deploy/docker-compose.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help install up down logs ps migrate test lint format
+.PHONY: help install up down logs ps migrate test test-integration lint format
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-9s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -33,8 +33,14 @@ ps: ## Show service status and health
 migrate: deploy/.env ## Apply database migrations (alembic upgrade head); `make up` also does this
 	$(COMPOSE) run --rm migrate
 
-test: ## Run the backend test suite
+test: ## Run the backend unit tests (no database or network needed)
 	cd backend && uv run pytest
+
+# Credentials come from deploy/.env; the tests create their own netops_test database.
+test-integration: deploy/.env ## Run integration tests against the compose db (needs `make up`)
+	set -a && . ./deploy/.env && set +a && cd backend && \
+	TEST_POSTGRES_PORT="$${DB_HOST_PORT:-5433}" TEST_POSTGRES_USER="$$POSTGRES_USER" \
+	TEST_POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" uv run pytest -m integration
 
 lint: ## Lint, format-check and type-check backend and frontend
 	cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy

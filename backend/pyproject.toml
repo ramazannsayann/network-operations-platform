@@ -75,5 +75,10 @@ warn_required_dynamic_aliases = true
 testpaths = ["tests"]
 # --disable-socket enforces the hard rule that tests never reach the network
 # (databases, Redis or real network devices). Unix sockets stay allowed because
-# the asyncio event loop needs them internally.
-addopts = "-ra --strict-markers --strict-config --disable-socket --allow-unix-socket"
+# the asyncio event loop needs them internally. Integration tests are deselected
+# here and run with `make test-integration` (pytest -m integration); they may only
+# connect to the local database (see tests/integration/conftest.py).
+addopts = "-ra --strict-markers --strict-config --disable-socket --allow-unix-socket -m 'not integration'"
+markers = [
+    "integration: needs the compose database on localhost; run with `make test-integration`",
+]
