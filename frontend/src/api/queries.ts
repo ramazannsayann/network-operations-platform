@@ -12,6 +12,13 @@ export type DeviceListQuery = NonNullable<paths['/api/v1/devices']['get']['param
 export type TopologyQuery = NonNullable<paths['/api/v1/topology']['get']['parameters']['query']>
 export type Layer = Schemas['TopologyLayer']
 export type JobStatus = Schemas['JobStatus']
+export type ConfigBackupsQuery = NonNullable<
+  paths['/api/v1/config-backups']['get']['parameters']['query']
+>
+export type ConfigChangesQuery = NonNullable<
+  paths['/api/v1/config-changes']['get']['parameters']['query']
+>
+export type EventsQuery = NonNullable<paths['/api/v1/events']['get']['parameters']['query']>
 
 const ACTIVE_JOB: JobStatus[] = ['queued', 'running']
 export const POLL_MS = 2000
@@ -29,7 +36,17 @@ export const keys = {
   topology: (query: TopologyQuery) => ['topology', query] as const,
   topologyChanges: (since: string, until?: string) => ['topology-changes', since, until] as const,
   layout: (layer: Layer) => ['topology-layout', layer] as const,
+  configBackups: (query: ConfigBackupsQuery) => ['config-backups', query] as const,
+  deviceConfigs: (id: string) => ['device', id, 'configs'] as const,
+  configVersion: (id: string) => ['config-version', id] as const,
+  configDiff: (from: string, to: string, context: number) =>
+    ['config-diff', from, to, context] as const,
+  configChanges: (query: ConfigChangesQuery) => ['config-changes', query] as const,
+  events: (query: EventsQuery) => ['events', query] as const,
 }
+
+// Lists that change as devices are backed up or send syslog.
+const LIVE_MS = 15_000
 
 export function useHealth() {
   return useQuery({
@@ -75,13 +92,14 @@ export function useInterfaces(id: string) {
   })
 }
 
+/** "Refresh now"; ``kinds`` narrows it (e.g. ``['config']`` for a configuration backup). */
 export function useRefreshDevice(id: string) {
   return useMutation({
-    mutationFn: () =>
+    mutationFn: (kinds?: Schemas['CollectionKind'][]) =>
       unwrap(
         api.POST('/api/v1/devices/{device_id}/refresh', {
           params: { path: { device_id: id } },
-          body: {},
+          body: kinds ? { kinds } : {},
         }),
       ),
   })
@@ -189,5 +207,82 @@ export function useSaveLayout(layer: Layer) {
         api.PUT('/api/v1/topology/layout', { params: { query: { layer } }, body: { positions } }),
       ),
     onSuccess: (layout) => client.setQueryData(keys.layout(layer), layout),
+  })
+}
+
+// --- Configuration management (M4) ---------------------------------------------------------
+
+export function useConfigBackups(query: ConfigBackupsQuery) {
+  return useQuery({
+    queryKey: keys.configBackups(query),
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/config-backups', { params: { query }, signal })),
+    placeholderData: keepPreviousData,
+    refetchInterval: LIVE_MS,
+  })
+}
+
+/** Every version of a device, newest first. */
+export function useDeviceConfigs(id: string) {
+  return useQuery({
+    queryKey: keys.deviceConfigs(id),
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/devices/{device_id}/configs', {
+          params: { path: { device_id: id }, query: { limit: 500 } },
+          signal,
+        }),
+      ),
+    refetchInterval: LIVE_MS,
+  })
+}
+
+/** A version's redacted text; versions never change, so it is cached for good. */
+export function useConfigVersion(id: string | null) {
+  return useQuery({
+    queryKey: keys.configVersion(id ?? ''),
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/configs/{version_id}', {
+          params: { path: { version_id: id ?? '' } },
+          signal,
+        }),
+      ),
+    enabled: id !== null,
+    staleTime: Infinity,
+  })
+}
+
+export function useConfigDiff(from: string | null, to: string | null, context = 3) {
+  return useQuery({
+    queryKey: keys.configDiff(from ?? '', to ?? '', context),
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/configs/diff', {
+          params: { query: { from: from ?? '', to: to ?? '', context_lines: context } },
+          signal,
+        }),
+      ),
+    enabled: from !== null && to !== null,
+    staleTime: Infinity,
+  })
+}
+
+export function useConfigChanges(query: ConfigChangesQuery) {
+  return useQuery({
+    queryKey: keys.configChanges(query),
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/config-changes', { params: { query }, signal })),
+    placeholderData: keepPreviousData,
+    refetchInterval: LIVE_MS,
+  })
+}
+
+export function useEvents(query: EventsQuery, live = true) {
+  return useQuery({
+    queryKey: keys.events(query),
+    queryFn: ({ signal }) => unwrap(api.GET('/api/v1/events', { params: { query }, signal })),
+    placeholderData: keepPreviousData,
+    refetchInterval: live ? 10_000 : false,
   })
 }

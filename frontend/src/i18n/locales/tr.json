@@ -11,7 +11,9 @@
     "alarms": "Alarmlar",
     "config": "Config",
     "soon": "yakında",
-    "toggle": "Menüyü aç/kapat"
+    "toggle": "Menüyü aç/kapat",
+    "configChanges": "Config değişiklikleri",
+    "events": "Olaylar"
   },
   "header": {
     "health": {
@@ -115,6 +117,13 @@
       "lldp": "LLDP",
       "arp": "ARP",
       "manual": "Elle"
+    },
+    "configTrigger": {
+      "scheduled": "Zamanlanmış",
+      "change_event": "Değişiklik olayı",
+      "manual": "Elle",
+      "pre_change": "Değişiklik öncesi",
+      "post_change": "Değişiklik sonrası"
     }
   },
   "devices": {
@@ -195,6 +204,11 @@
       "errDisabled": "err-disabled",
       "native": "native {{vlan}}",
       "empty": "Henüz arayüz verisi yok."
+    },
+    "events": "Olaylar",
+    "tabs": {
+      "overview": "Genel bakış",
+      "config": "Config"
     }
   },
   "discovery": {
@@ -339,5 +353,141 @@
   },
   "formats": {
     "dateTime": "DD.MM.YYYY HH:mm"
+  },
+  "filters": {
+    "device": "Cihaz",
+    "range": "Zaman aralığı",
+    "ranges": {
+      "24h": "Son 24 saat",
+      "7d": "Son 7 gün",
+      "30d": "Son 30 gün",
+      "all": "Tümü"
+    }
+  },
+  "configs": {
+    "title": "Konfigürasyon yedekleri",
+    "subtitle": "Yönetilen cihazların son yedeği, sürümleri ve platform dışı değişiklikleri",
+    "search": "Cihaz ara",
+    "columns": {
+      "device": "Cihaz",
+      "lastBackup": "Son yedek",
+      "status": "Son deneme",
+      "versions": "Sürüm",
+      "lastChange": "Son değişiklik",
+      "recentExternal": "Platform dışı (son {{days}} gün)"
+    },
+    "neverBackedUp": "Henüz yedeklenmedi",
+    "externalCount_one": "{{count}} değişiklik",
+    "externalCount_other": "{{count}} değişiklik",
+    "empty": {
+      "title": "Yedeklenecek cihaz yok",
+      "body": "Keşifle bulunan ve yönetilen cihazların konfigürasyonu her gece ve her değişiklikten sonra yedeklenir."
+    },
+    "history": "Sürüm geçmişi",
+    "versionCount_one": "{{count}} sürüm",
+    "versionCount_other": "{{count}} sürüm",
+    "noVersions": "Bu cihazın henüz yedeği yok. İlk yedek için “Şimdi yedekle”yi kullanın.",
+    "redaction": {
+      "secret": "gizli",
+      "certificate": "sertifika gizlendi",
+      "hint": "Gizli değer (parola, anahtar veya community). Platform bu değeri hiçbir zaman göstermez.",
+      "notice": "Parolalar, anahtarlar ve SNMP community'leri gizlenir; satırlar korunduğu için gizli bir değerin değiştiği farkta yine görünür."
+    },
+    "origin": {
+      "external": "Platform dışı değişiklik",
+      "platform": "Platform",
+      "externalShort": "Platform dışı"
+    },
+    "backup": {
+      "button": "Şimdi yedekle",
+      "running": "Yedekleniyor…",
+      "done": "Yedek alındı.",
+      "failed": "Yedekleme başarısız: {{error}}"
+    },
+    "timeline": {
+      "select": "{{time}} sürümünü göster",
+      "first": "İlk yedek",
+      "unknownUser": "bilinmeyen kullanıcı"
+    },
+    "viewer": {
+      "label": "Konfigürasyon",
+      "size": "{{size}} bayt",
+      "show": "Görüntüle",
+      "compare": "Karşılaştır"
+    },
+    "diff": {
+      "add": "Eklendi",
+      "del": "Silindi",
+      "identical": "İki sürüm aynı.",
+      "addedCount_one": "+{{count}} satır",
+      "addedCount_other": "+{{count}} satır",
+      "removedCount_one": "−{{count}} satır",
+      "removedCount_other": "−{{count}} satır",
+      "split": "Yan yana",
+      "unified": "Birleşik",
+      "mode": "Fark görünümü",
+      "from": "Eski sürüm",
+      "to": "Yeni sürüm",
+      "needTwo": "Karşılaştırmak için en az iki sürüm gerekir."
+    },
+    "changes": {
+      "title": "Değişiklikler",
+      "empty": "Bu cihaz için kayıtlı değişiklik yok.",
+      "when": "Zaman",
+      "device": "Cihaz",
+      "origin": "Kaynak",
+      "user": "Kullanıcı",
+      "sourceIp": "Kaynak IP",
+      "commands": "Komutlar",
+      "diff": "Fark",
+      "showDiff": "Farkı göster",
+      "more_one": "+{{count}} komut daha",
+      "more_other": "+{{count}} komut daha",
+      "fewer": "Daha az göster",
+      "foundBy": {
+        "scheduled": "zamanlanmış yedekte bulundu",
+        "manual": "elle alınan yedekte bulundu",
+        "change_event": "syslog ile bildirildi",
+        "pre_change": "değişiklik öncesi yedekte bulundu",
+        "post_change": "değişiklik sonrası yedekte bulundu"
+      },
+      "pageTitle": "Config değişiklikleri",
+      "count_one": "{{count}} değişiklik",
+      "count_other": "{{count}} değişiklik",
+      "none": "Filtrelere uyan değişiklik yok.",
+      "userPlaceholder": "ör. jdoe"
+    }
+  },
+  "events": {
+    "title": "Olaylar",
+    "subtitle": "Cihazlardan gelen syslog mesajları",
+    "count_one": "{{count}} olay",
+    "count_other": "{{count}} olay",
+    "live": "Canlı",
+    "severityFilter": "Önem derecesi",
+    "mnemonic": "Mnemonic",
+    "mnemonicPlaceholder": "ör. LINK-3-UPDOWN",
+    "severity": {
+      "0": "Acil",
+      "1": "Alarm",
+      "2": "Kritik",
+      "3": "Hata",
+      "4": "Uyarı",
+      "5": "Bildirim",
+      "6": "Bilgi",
+      "7": "Hata ayıklama"
+    },
+    "empty": {
+      "title": "Olay yok",
+      "body": "Cihazların syslog'u platforma göndermesi gerekir (logging host); bkz. docs/device-prerequisites.md."
+    },
+    "columns": {
+      "time": "Zaman",
+      "device": "Cihaz",
+      "severity": "Önem",
+      "mnemonic": "Mnemonic",
+      "message": "Mesaj",
+      "source": "Kaynak IP"
+    }
   }
 }

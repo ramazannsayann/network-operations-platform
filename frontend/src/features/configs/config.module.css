@@ -1,0 +1,92 @@
+/* Configuration text, its diff and the redaction marker; colours follow the colour scheme. */
+.code {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.code td {
+  padding: 0 8px;
+  vertical-align: top;
+  white-space: pre;
+}
+
+.number {
+  color: var(--mantine-color-dimmed);
+  text-align: right;
+  user-select: none;
+  width: 1%;
+  border-right: 1px solid var(--mantine-color-default-border);
+}
+
+.sign {
+  width: 1%;
+  user-select: none;
+  color: var(--mantine-color-dimmed);
+}
+
+.add {
+  background: var(--mantine-color-teal-light);
+}
+
+.del {
+  background: var(--mantine-color-red-light);
+}
+
+.empty {
+  background: var(--mantine-color-default-hover);
+}
+
+.hunk td {
+  color: var(--mantine-color-dimmed);
+  background: var(--mantine-color-default-hover);
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.split td.half {
+  width: 50%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment {
+  color: var(--mantine-color-dimmed);
+}
+
+.section {
+  color: var(--mantine-color-indigo-light-color);
+  font-weight: 600;
+}
+
+.command {
+  color: var(--mantine-color-blue-light-color);
+}
+
+.negation {
+  color: var(--mantine-color-grape-light-color);
+  font-weight: 600;
+}
+
+.interface {
+  color: var(--mantine-color-cyan-light-color);
+}
+
+.address {
+  color: var(--mantine-color-teal-light-color);
+}
+
+.redacted {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border: 1px dashed var(--mantine-color-default-border);
+  border-radius: 4px;
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-text);
+  font-style: italic;
+  white-space: nowrap;
+}

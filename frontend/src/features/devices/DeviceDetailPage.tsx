@@ -11,15 +11,25 @@ import {
   Skeleton,
   Stack,
   Table,
+  Tabs,
   Text,
   TextInput,
   Title,
 } from '@mantine/core'
 import { useQueryClient } from '@tanstack/react-query'
-import { IconArrowLeft, IconCheck, IconRefresh, IconSearch, IconX } from '@tabler/icons-react'
+import {
+  IconArrowLeft,
+  IconCheck,
+  IconFileSettings,
+  IconInfoSquare,
+  IconMessages,
+  IconRefresh,
+  IconSearch,
+  IconX,
+} from '@tabler/icons-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 
 import type { Schemas } from '../../api/client'
 import { keys, useDevice, useInterfaces, useJob, useRefreshDevice } from '../../api/queries'
@@ -27,6 +37,7 @@ import { ProblemAlert } from '../../components/ProblemAlert'
 import { RelativeTime } from '../../components/RelativeTime'
 import { CollectionStatusBadge, ManagementStatusBadge } from '../../components/StatusBadges'
 import { speed, vlanList } from '../../lib/format'
+import { ConfigTab } from '../configs/ConfigTab'
 
 type Interface = Schemas['InterfaceSummary']
 
@@ -133,18 +144,11 @@ function RefreshButton({ device }: { device: Schemas['Device'] }) {
 export function DeviceDetailPage() {
   const { t } = useTranslation()
   const { deviceId = '' } = useParams()
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'config' ? 'config' : 'overview'
   const device = useDevice(deviceId)
   const interfaces = useInterfaces(deviceId)
   const [filter, setFilter] = useState('')
-
-  const parents = useMemo(() => {
-    const byId = new Map((interfaces.data?.items ?? []).map((item) => [item.id, item.name]))
-    return byId
-  }, [interfaces.data])
-  const shown = (interfaces.data?.items ?? []).filter((item) => {
-    const text = `${item.name} ${item.name_normalized} ${item.description ?? ''}`.toLowerCase()
-    return text.includes(filter.toLowerCase())
-  })
 
   if (device.isError) {
     return (
@@ -179,7 +183,17 @@ export function DeviceDetailPage() {
             <Badge variant="outline">{t(`enums.role.${d.role}`)}</Badge>
           </Group>
         </Stack>
-        <RefreshButton device={d} />
+        <Group align="flex-start">
+          <Button
+            component={Link}
+            to={`/events?device=${d.id}`}
+            variant="default"
+            leftSection={<IconMessages size={16} aria-hidden />}
+          >
+            {t('device.events')}
+          </Button>
+          <RefreshButton device={d} />
+        </Group>
       </Group>
 
       {!d.is_managed && (
@@ -188,6 +202,54 @@ export function DeviceDetailPage() {
         </Alert>
       )}
 
+      <Tabs
+        value={tab}
+        onChange={(value) => {
+          setParams(value === 'config' ? { tab: 'config' } : {}, { replace: true })
+        }}
+        keepMounted={false}
+      >
+        <Tabs.List mb="md">
+          <Tabs.Tab value="overview" leftSection={<IconInfoSquare size={16} aria-hidden />}>
+            {t('device.tabs.overview')}
+          </Tabs.Tab>
+          <Tabs.Tab value="config" leftSection={<IconFileSettings size={16} aria-hidden />}>
+            {t('device.tabs.config')}
+          </Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="config">
+          <ConfigTab device={d} />
+        </Tabs.Panel>
+        <Tabs.Panel value="overview">
+          <Overview device={d} interfaces={interfaces} filter={filter} setFilter={setFilter} />
+        </Tabs.Panel>
+      </Tabs>
+    </Stack>
+  )
+}
+
+function Overview({
+  device: d,
+  interfaces,
+  filter,
+  setFilter,
+}: {
+  device: Schemas['Device']
+  interfaces: ReturnType<typeof useInterfaces>
+  filter: string
+  setFilter: (value: string) => void
+}) {
+  const { t } = useTranslation()
+  const parents = useMemo(() => {
+    const byId = new Map((interfaces.data?.items ?? []).map((item) => [item.id, item.name]))
+    return byId
+  }, [interfaces.data])
+  const shown = (interfaces.data?.items ?? []).filter((item) => {
+    const text = `${item.name} ${item.name_normalized} ${item.description ?? ''}`.toLowerCase()
+    return text.includes(filter.toLowerCase())
+  })
+  return (
+    <Stack gap="md">
       <Card withBorder>
         <Title order={3} size="h4" mb="sm">
           {t('device.facts')}
