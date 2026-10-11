@@ -43,6 +43,7 @@ export const keys = {
     ['config-diff', from, to, context] as const,
   configChanges: (query: ConfigChangesQuery) => ['config-changes', query] as const,
   events: (query: EventsQuery) => ['events', query] as const,
+  sessions: ['auth', 'sessions'] as const,
 }
 
 // Lists that change as devices are backed up or send syslog.
@@ -284,5 +285,50 @@ export function useEvents(query: EventsQuery, live = true) {
     queryFn: ({ signal }) => unwrap(api.GET('/api/v1/events', { params: { query }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live ? 10_000 : false,
+  })
+}
+
+// --- The signed-in user's account (M7) -------------------------------------------------------
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (body: Schemas['PasswordChange']) =>
+      unwrap(api.POST('/api/v1/auth/password', { body })),
+  })
+}
+
+export function useBeginMfa() {
+  return useMutation({ mutationFn: () => unwrap(api.POST('/api/v1/auth/mfa/enroll')) })
+}
+
+export function useConfirmMfa() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      unwrap(api.POST('/api/v1/auth/mfa/enroll/confirm', { body: { code } })),
+  })
+}
+
+export function useDisableMfa() {
+  return useMutation({
+    mutationFn: (body: Schemas['MfaDisable']) =>
+      unwrap(api.POST('/api/v1/auth/mfa/disable', { body })),
+  })
+}
+
+export function useSessions() {
+  return useQuery({
+    queryKey: keys.sessions,
+    queryFn: ({ signal }) => unwrap(api.GET('/api/v1/auth/sessions', { signal })),
+  })
+}
+
+export function useRevokeSession() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        api.DELETE('/api/v1/auth/sessions/{session_id}', { params: { path: { session_id: id } } }),
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.sessions }),
   })
 }

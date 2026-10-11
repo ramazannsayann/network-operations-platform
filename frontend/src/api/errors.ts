@@ -24,6 +24,7 @@ export async function unwrap<T>(
   call: Promise<{ data?: T; error?: unknown; response: Response }>,
 ): Promise<T> {
   const { data, error, response } = await call
-  if (response.ok && data !== undefined) return data
+  // A 204 No Content answer has no data at all.
+  if (response.ok) return data as T
   throw new ApiError(response.status, isProblem(error) ? error : null)
 }

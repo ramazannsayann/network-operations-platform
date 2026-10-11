@@ -12,6 +12,7 @@ import { RouterProvider } from 'react-router'
 import { LocalizedDates } from './app/LocalizedDates'
 import { router } from './app/router'
 import { theme } from './app/theme'
+import { AuthProvider } from './auth/AuthProvider'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000, retry: 1, refetchOnWindowFocus: false } },
@@ -25,7 +26,9 @@ createRoot(container).render(
     <MantineProvider theme={theme} defaultColorScheme="auto">
       <LocalizedDates>
         <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
         </QueryClientProvider>
       </LocalizedDates>
     </MantineProvider>
