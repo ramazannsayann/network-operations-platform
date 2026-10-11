@@ -12,12 +12,6 @@ export default defineConfig(({ mode }) => {
     process.env.VITE_API_PROXY_TARGET ?? (mode === 'mock' ? MOCK_SERVER : 'http://localhost:8000')
   return {
     plugins: [react()],
-    // Prism enforces the contract's bearer security; the real API does not check tokens
-    // until M7. Mock mode therefore sends a placeholder token (src/api/client.ts).
-    define:
-      mode === 'mock'
-        ? { 'import.meta.env.VITE_API_TOKEN': JSON.stringify('mock-not-checked') }
-        : {},
     build: {
       rolldownOptions: {
         output: {

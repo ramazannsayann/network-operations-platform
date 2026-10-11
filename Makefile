@@ -5,25 +5,31 @@ COMPOSE := docker compose -f deploy/docker-compose.yml
 .DEFAULT_GOAL := help
 .PHONY: help install env up down logs ps migrate test test-integration test-scale lint format openapi mock \
 	fakelab-compose fakelab-up fakelab-seed fakelab-discover fakelab-accuracy fakelab-down \
-	fakelab-change fakelab-reset fakelab-backup fakelab-fixtures
+	fakelab-change fakelab-reset fakelab-backup fakelab-fixtures fakelab-users fakelab-mfa-reset
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # A new Fernet key: 32 random bytes, URL-safe base64.
 NEW_FERNET_KEY = $$(openssl rand -base64 32 | tr '+/' '-_')
+NEW_SIGNING_KEY = $$(openssl rand -hex 32)
 
 # Created on first use from the example, with a random database password and a random
 # credentials key; `env` adds the key to files created before it existed.
 deploy/.env:
 	@sed -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$(openssl rand -hex 24)/" \
-	     -e "s/^CREDENTIALS_KEY=.*/CREDENTIALS_KEY=$(NEW_FERNET_KEY)/" deploy/.env.example > $@
-	@echo "Created $@ with a random POSTGRES_PASSWORD and CREDENTIALS_KEY."
+	     -e "s/^CREDENTIALS_KEY=.*/CREDENTIALS_KEY=$(NEW_FERNET_KEY)/" \
+	     -e "s/^AUTH_SIGNING_KEY=.*/AUTH_SIGNING_KEY=$(NEW_SIGNING_KEY)/" deploy/.env.example > $@
+	@echo "Created $@ with a random POSTGRES_PASSWORD, CREDENTIALS_KEY and AUTH_SIGNING_KEY."
 
 env: deploy/.env
 	@grep -q '^CREDENTIALS_KEY=' deploy/.env || { \
 	  echo "CREDENTIALS_KEY=$(NEW_FERNET_KEY)" >> deploy/.env; \
 	  echo "Added a random CREDENTIALS_KEY to deploy/.env; back it up (see ADR-0004)."; }
+	@grep -Eq '^AUTH_SIGNING_KEY=.{32,}$$' deploy/.env || { \
+	  sed -i.bak '/^AUTH_SIGNING_KEY=/d' deploy/.env && rm -f deploy/.env.bak; \
+	  echo "AUTH_SIGNING_KEY=$(NEW_SIGNING_KEY)" >> deploy/.env; \
+	  echo "Added a random AUTH_SIGNING_KEY to deploy/.env (signs access tokens, ADR-0008)."; }
 
 install: ## Install backend + frontend dependencies and the git pre-commit hooks
 	cd backend && uv sync
@@ -94,6 +100,25 @@ fakelab-up: env ## Start the stack plus the fake lab's devices (worker joins 10.
 	  echo "FAKELAB_PASSWORD=$$(openssl rand -hex 16)" >> deploy/.env; \
 	  echo "Added a random FAKELAB_PASSWORD to deploy/.env."; }
 	$(COMPOSE_FAKELAB) up --build --detach --wait
+
+# UI users of the fake lab, one per role, all with FAKELAB_UI_PASSWORD (random, in
+# deploy/.env). Admins and operators set up MFA at their first sign-in.
+fakelab-users: ## Create the UI users fakelab-admin, fakelab-operator, fakelab-viewer
+	@grep -q '^FAKELAB_UI_PASSWORD=' deploy/.env || { \
+	  echo "FAKELAB_UI_PASSWORD=ui-$$(openssl rand -hex 12)" >> deploy/.env; \
+	  echo "Added a random FAKELAB_UI_PASSWORD to deploy/.env."; }
+	@set -a && . ./deploy/.env && set +a && \
+	for user in fakelab-admin:admin fakelab-operator:operator fakelab-viewer:viewer; do \
+	  name=$${user%%:*}; role=$${user##*:}; \
+	  printf '%s\n' "$$FAKELAB_UI_PASSWORD" | $(COMPOSE_FAKELAB) exec -T api netops users create \
+	    $$name --role $$role --no-temporary --password-stdin 2>/dev/null || \
+	  printf '%s\n' "$$FAKELAB_UI_PASSWORD" | $(COMPOSE_FAKELAB) exec -T api netops users \
+	    set-password $$name --no-temporary --password-stdin; \
+	done
+
+USERNAME ?= fakelab-admin
+fakelab-mfa-reset: ## Remove a fake lab UI user's MFA (USERNAME=fakelab-admin); enrolls again
+	$(COMPOSE_FAKELAB) exec -T api netops users reset-mfa $(USERNAME)
 
 # Two profiles: an outdated one (random password no device accepts) and the lab's, so
 # discovery shows the two-attempt login and remembers the profile that worked.

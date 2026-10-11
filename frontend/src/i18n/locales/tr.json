@@ -13,7 +13,12 @@
     "soon": "yakında",
     "toggle": "Menüyü aç/kapat",
     "configChanges": "Config değişiklikleri",
-    "events": "Olaylar"
+    "events": "Olaylar",
+    "users": "Kullanıcılar",
+    "credentials": "Kimlik profilleri",
+    "audit": "Denetim kaydı",
+    "admin": "Yönetim",
+    "profile": "Profilim"
   },
   "header": {
     "health": {
@@ -28,7 +33,8 @@
       "dark": "Koyu tema",
       "auto": "Sistem teması"
     },
-    "language": "Dil"
+    "language": "Dil",
+    "account": "Hesap"
   },
   "common": {
     "loading": "Yükleniyor…",
@@ -124,6 +130,16 @@
       "manual": "Elle",
       "pre_change": "Değişiklik öncesi",
       "post_change": "Değişiklik sonrası"
+    },
+    "userRole": {
+      "admin": "Yönetici",
+      "operator": "Operatör",
+      "viewer": "İzleyici"
+    },
+    "auditOutcome": {
+      "success": "Başarılı",
+      "denied": "Reddedildi",
+      "failed": "Başarısız"
     }
   },
   "devices": {
@@ -272,7 +288,9 @@
       "duplicateNote": "{{device}} ile aynı kasa (aynı seri numarası)",
       "authFailedNote": "SSH girişi reddedildi ({{attempts}} deneme)",
       "unreachableNote": "SSH ile bağlanılamadı"
-    }
+    },
+    "readOnlyTitle": "Yalnızca görüntüleme",
+    "readOnly": "Rolünüz keşif başlatamaz; geçmiş keşifleri görebilirsiniz."
   },
   "topology": {
     "title": "Harita",
@@ -488,6 +506,178 @@
       "mnemonic": "Mnemonic",
       "message": "Mesaj",
       "source": "Kaynak IP"
+    }
+  },
+  "auth": {
+    "logout": "Çıkış yap",
+    "signedInAs": "{{name}} ({{username}}) olarak oturum açıldı",
+    "forbidden": {
+      "title": "Bu sayfaya erişiminiz yok",
+      "body": "Rolünüzün ({{role}}) bu sayfa için gereken izni ({{permission}}) yok."
+    },
+    "login": {
+      "title": "Oturum aç",
+      "mfaTitle": "İki adımlı doğrulama",
+      "username": "Kullanıcı adı",
+      "password": "Parola",
+      "submit": "Oturum aç",
+      "failed": "Kullanıcı adı veya parola hatalı ya da hesap şu an oturum açamıyor.",
+      "rateLimited": "Bu adresten çok fazla deneme yapıldı; biraz sonra yeniden deneyin.",
+      "wrongCode": "Kod hatalı ya da daha önce kullanılmış.",
+      "recoveryCode": "Kurtarma kodu",
+      "code": "Doğrulama kodu",
+      "codeHelp": "Kimlik doğrulama uygulamanızdaki 6 haneli kod.",
+      "verify": "Doğrula",
+      "useCode": "Doğrulama kodu kullan",
+      "useRecovery": "Kurtarma kodu kullan",
+      "back": "Geri"
+    }
+  },
+  "account": {
+    "title": "Profilim",
+    "username": "Kullanıcı adı",
+    "name": "Ad",
+    "role": "Rol",
+    "lastLogin": "Son oturum",
+    "password": {
+      "title": "Parola",
+      "current": "Mevcut parola",
+      "new": "Yeni parola",
+      "repeat": "Yeni parola (tekrar)",
+      "policy": "En az {{min}} karakter. Uzun bir cümle iyi bir paroladır; sık kullanılan parolalar kabul edilmez.",
+      "mismatch": "Parolalar aynı değil.",
+      "changed": "Parola değiştirildi.",
+      "otherSessions": "Parola değişince diğer oturumlarınız kapanır.",
+      "submit": "Parolayı değiştir",
+      "errors": {
+        "too_short": "En az {{min}} karakter olmalı.",
+        "too_long": "En fazla 256 karakter olabilir.",
+        "common": "Bu parola çok yaygın.",
+        "repetitive": "Bu parola kendini tekrar ediyor.",
+        "sequence": "Bu parola basit bir dizi.",
+        "contains_name": "Parola adınızı içermemeli.",
+        "unchanged": "Yeni parola mevcut paroladan farklı olmalı.",
+        "wrong": "Mevcut parola hatalı.",
+        "other": "Parola kurallara uymuyor."
+      }
+    },
+    "mfa": {
+      "title": "İki adımlı doğrulama (TOTP)",
+      "on": "Açık",
+      "off": "Kapalı",
+      "requiredForRole": "Rolünüz için iki adımlı doğrulama zorunlu.",
+      "optional": "İki adımlı doğrulama rolünüz için isteğe bağlı; açmanız önerilir.",
+      "enable": "İki adımlı doğrulamayı aç",
+      "disable": "İki adımlı doğrulamayı kapat",
+      "disableBody": "Kapatmak için parolanız ve bir doğrulama veya kurtarma kodu gerekir.",
+      "reset": "Yeniden kur (ör. yeni telefon)",
+      "resetBody": "Mevcut kurulum kaldırılır ve hemen yeniden kurarsınız (ör. yeni bir telefona geçerken). Bunun için parolanız ve bir doğrulama veya kurtarma kodu gerekir.",
+      "codeOrRecovery": "Doğrulama kodu veya kurtarma kodu",
+      "codesOnce": "Bu kurtarma kodları yalnızca şimdi gösterilir. Telefonunuza erişemezseniz her biri bir kez oturum açmanızı sağlar; güvenli bir yerde saklayın.",
+      "copied": "Kopyalandı",
+      "copy": "Kopyala",
+      "download": "İndir (.txt)",
+      "saved": "Kurtarma kodlarını güvenli bir yere kaydettim",
+      "finish": "Bitir",
+      "step": {
+        "start": "Başla",
+        "scan": "Uygulamaya ekle",
+        "codes": "Kurtarma kodları"
+      },
+      "intro": "Oturum açarken parolanıza ek olarak telefonunuzdaki bir kimlik doğrulama uygulamasının (ör. Google Authenticator, Microsoft Authenticator, FreeOTP) ürettiği kod istenecek.",
+      "begin": "Kuruluma başla",
+      "scan": "QR kodunu kimlik doğrulama uygulamasıyla okutun.",
+      "qrAlt": "Kimlik doğrulama uygulaması için QR kodu",
+      "manual": "QR kodu okutamıyorsanız bu anahtarı elle girin:",
+      "enterCode": "Uygulamanın gösterdiği 6 haneli kodu girin:",
+      "codeLabel": "Doğrulama kodu",
+      "confirm": "Doğrula ve aç"
+    },
+    "sessions": {
+      "title": "Açık oturumlar",
+      "started": "Başlangıç",
+      "lastUsed": "Son kullanım",
+      "address": "Adres",
+      "browser": "Tarayıcı",
+      "current": "Bu oturum",
+      "end": "Sonlandır",
+      "endThis": "Bu oturumu kapat (çıkış)"
+    },
+    "setup": {
+      "passwordTitle": "Parolanızı değiştirin",
+      "passwordBody": "Hesabınız geçici bir parolayla açıldı ya da parolanız sıfırlandı. Devam etmek için yeni bir parola belirleyin.",
+      "mfaTitle": "İki adımlı doğrulamayı kurun",
+      "mfaBody": "Rolünüz için iki adımlı doğrulama zorunlu. Platformu kullanmadan önce kurmanız gerekiyor."
+    }
+  },
+  "admin": {
+    "users": {
+      "title": "Kullanıcılar",
+      "new": "Yeni kullanıcı",
+      "search": "Kullanıcı ara",
+      "username": "Kullanıcı adı",
+      "name": "Ad",
+      "email": "E-posta",
+      "role": "Rol",
+      "roleOf": "{{username}} kullanıcısının rolü",
+      "state": "Durum",
+      "lastLogin": "Son oturum",
+      "active": "Etkin",
+      "inactive": "Devre dışı",
+      "locked": "Kilitli",
+      "mustChange": "Parola değişmeli",
+      "actionsFor": "{{username}} için işlemler",
+      "deactivate": "Devre dışı bırak",
+      "activate": "Etkinleştir",
+      "resetMfa": "İki adımlı doğrulamayı sıfırla",
+      "resetPassword": "Parolayı sıfırla",
+      "resetPasswordBody": "{{username}} bir sonraki oturumda parolasını değiştirmek zorunda kalacak; açık oturumları kapanır.",
+      "resetOptional": "İsteğe bağlı: kullanıcı parolasını unuttuysa geçici bir parola belirleyin.",
+      "unlock": "Kilidi aç",
+      "temporaryPassword": "Geçici parola",
+      "temporaryHelp": "Kullanıcı ilk oturumda değiştirmek zorunda; en az 12 karakter.",
+      "usernameRule": "3-64 karakter: küçük harf, rakam ve . _ @ -",
+      "create": "Oluştur"
+    },
+    "credentials": {
+      "title": "Kimlik profilleri",
+      "subtitle": "Cihazlara bağlanmak için kullanılan hesaplar. Gizli alanlar yalnızca yazılabilir: kaydedildikten sonra hiçbir zaman gösterilmez.",
+      "new": "Yeni profil",
+      "edit": "Düzenle",
+      "name": "Profil adı",
+      "kind": "Tür",
+      "username": "Kullanıcı adı",
+      "password": "Parola",
+      "enableSecret": "Enable secret",
+      "clearEnable": "Kayıtlı enable secret'ı kaldır",
+      "authProtocol": "Kimlik doğrulama protokolü",
+      "privProtocol": "Şifreleme protokolü",
+      "authKey": "Kimlik doğrulama anahtarı",
+      "privKey": "Şifreleme anahtarı",
+      "writeOnly": "Şifreli saklanır, bir daha gösterilmez.",
+      "stored": "Kayıtlı değer gösterilmez; boş bırakırsanız değişmez.",
+      "keep": "Değiştirmek için yazın",
+      "optional": "İsteğe bağlı.",
+      "usedBy_one": "{{count}} cihaz bu profili kullanıyor.",
+      "usedBy_other": "{{count}} cihaz bu profili kullanıyor.",
+      "delete": "Sil",
+      "save": "Kaydet",
+      "create": "Oluştur"
+    },
+    "audit": {
+      "title": "Denetim kaydı",
+      "subtitle": "Oturumlar, yetki reddleri ve tüm yönetim işlemleri; kayıtlar değiştirilemez ve silinemez.",
+      "count_one": "{{count}} kayıt",
+      "count_other": "{{count}} kayıt",
+      "actor": "Kullanıcı",
+      "actorPlaceholder": "kullanıcı adı",
+      "action": "İşlem",
+      "outcome": "Sonuç",
+      "when": "Zaman",
+      "address": "Adres",
+      "target": "Hedef",
+      "details": "Ayrıntılar",
+      "noActor": "anonim / sunucu (CLI)"
     }
   }
 }

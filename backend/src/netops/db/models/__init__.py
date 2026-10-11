@@ -26,11 +26,13 @@ from netops.db.models.observations import (
     StpPortObservation,
     VlanObservation,
 )
+from netops.db.models.security import AuditLogEntry, MfaRecoveryCode, RefreshToken, User
 from netops.db.models.topology import Link
 
 __all__ = [
     "Alarm",
     "ArpEntry",
+    "AuditLogEntry",
     "CollectionRun",
     "ConfigChange",
     "ConfigVersion",
@@ -51,12 +53,15 @@ __all__ = [
     "Location",
     "MacEntry",
     "Metric",
+    "MfaRecoveryCode",
     "NeighborObservation",
     "Observation",
     "OspfNeighborObservation",
+    "RefreshToken",
     "RouteEntry",
     "StpInstanceObservation",
     "StpPortObservation",
     "TopologyPosition",
+    "User",
     "VlanObservation",
 ]

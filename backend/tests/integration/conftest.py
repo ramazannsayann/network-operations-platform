@@ -10,6 +10,7 @@ import asyncio
 import re
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -20,24 +21,30 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from netops.api.v1.common import get_task_queue
+from netops.auth.ratelimit import MemoryRateLimiter, get_rate_limiter
 from netops.core.settings import get_settings
+from netops.db.enums import UserRole
 from netops.db.session import create_engine, get_engine, get_sessionmaker
 from netops.discovery.engine import run_discovery
 from netops_fakes.local import LocalLab
 from netops_fakes.topology import load
 from tests.integration.support import (
+    ADMIN,
+    ADMIN_PASSWORD,
     FAKELAB_REQUEST,
     FAKELAB_TOPOLOGY,
     PASSWORD,
     USERNAME,
     Recorder,
+    add_user,
     clear_inventory,
     create_lab_profiles,
     run,
+    sign_in,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -147,6 +154,8 @@ def app_on_test_database(
         "POSTGRES_DB": migrated_database.database,
         "SSH_RETRIES": 0,
         "SSH_CONNECT_TIMEOUT_SECONDS": 5,
+        # API tests sign in as an admin without MFA; the MFA tests set their own policy.
+        "AUTH_MFA_REQUIRED_ROLES": "",
     }.items():
         monkeypatch.setenv(name, str(value))
     get_settings.cache_clear()
@@ -162,16 +171,31 @@ def profiles(app_on_test_database: None) -> Iterator[list[uuid.UUID]]:
 
 
 @pytest.fixture
-def api(profiles: list[uuid.UUID]) -> Iterator[tuple[TestClient, Recorder]]:
-    """The application on the test database, with a recording task queue."""
+def api(
+    profiles: list[uuid.UUID], monkeypatch: pytest.MonkeyPatch
+) -> Iterator[tuple[TestClient, Recorder]]:
+    """The application on the test database, with a recording task queue and an admin
+    signed in (bearer header set on the client)."""
     from netops.main import create_app
 
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()
+
+    # Without a connection pool: tests use several clients (browsers) of one app, each on
+    # its own event loop, and a pooled asyncpg connection cannot move between loops.
+    @lru_cache
+    def unpooled_engine() -> AsyncEngine:
+        return create_engine(get_settings().database_url, poolclass=NullPool)
+
+    monkeypatch.setattr("netops.db.session.get_engine", unpooled_engine)
     recorder = Recorder()
     app = create_app()
     app.dependency_overrides[get_task_queue] = lambda: recorder
+    limiter = MemoryRateLimiter()
+    app.dependency_overrides[get_rate_limiter] = lambda: limiter
+    run(lambda session: add_user(session, ADMIN, UserRole.ADMIN, ADMIN_PASSWORD))
     with TestClient(app) as client:
+        sign_in(client, ADMIN, ADMIN_PASSWORD)
         yield client, recorder
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()

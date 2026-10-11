@@ -60,9 +60,38 @@ EXPECTED_V1_OPERATIONS = {
     ("GET", "/api/v1/config-changes"),
     ("GET", "/api/v1/config-backups"),
     ("GET", "/api/v1/jobs/{job_id}"),
+    # step 9 (M7)
+    ("POST", "/api/v1/auth/mfa/verify"),
+    ("POST", "/api/v1/auth/refresh"),
+    ("POST", "/api/v1/auth/logout"),
+    ("POST", "/api/v1/auth/password"),
+    ("POST", "/api/v1/auth/mfa/enroll"),
+    ("POST", "/api/v1/auth/mfa/enroll/confirm"),
+    ("POST", "/api/v1/auth/mfa/disable"),
+    ("GET", "/api/v1/auth/sessions"),
+    ("DELETE", "/api/v1/auth/sessions/{session_id}"),
+    ("GET", "/api/v1/users"),
+    ("POST", "/api/v1/users"),
+    ("GET", "/api/v1/users/{user_id}"),
+    ("PATCH", "/api/v1/users/{user_id}"),
+    ("POST", "/api/v1/users/{user_id}/deactivate"),
+    ("POST", "/api/v1/users/{user_id}/reset-mfa"),
+    ("POST", "/api/v1/users/{user_id}/reset-password"),
+    ("POST", "/api/v1/users/{user_id}/unlock"),
+    ("POST", "/api/v1/credential-profiles"),
+    ("GET", "/api/v1/credential-profiles/{profile_id}"),
+    ("PATCH", "/api/v1/credential-profiles/{profile_id}"),
+    ("DELETE", "/api/v1/credential-profiles/{profile_id}"),
+    ("GET", "/api/v1/audit"),
 }
-PUBLIC_OPERATIONS = {("GET", "/api/health"), ("POST", "/api/v1/auth/login")}
-# Implemented for real (steps 6 to 8); they need the database and are tested in
+# Without a bearer token: how a client gets one, and the health check.
+PUBLIC_OPERATIONS = {
+    ("GET", "/api/health"),
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/mfa/verify"),
+    ("POST", "/api/v1/auth/refresh"),
+}
+# Implemented for real (steps 6 to 9); they need the database and are tested in
 # tests/integration/test_api.py. Every other v1 route is still a 501 stub.
 IMPLEMENTED_OPERATIONS = {
     ("GET", "/api/v1/devices"),
@@ -87,6 +116,13 @@ IMPLEMENTED_OPERATIONS = {
     ("GET", "/api/v1/configs/{version_id}"),
     ("GET", "/api/v1/config-changes"),
     ("GET", "/api/v1/events"),
+    # step 9: every auth, user, credential profile and audit route
+    *(
+        operation
+        for operation in EXPECTED_V1_OPERATIONS
+        if operation[1].startswith(("/api/v1/auth/", "/api/v1/users", "/api/v1/audit"))
+        or operation[1].startswith("/api/v1/credential-profiles")
+    ),
 }
 
 SOME_ID = "5e0c7a1d-0000-4000-8000-000000002004"
@@ -170,7 +206,7 @@ def test_openapi_document_is_valid(spec: dict[str, Any]) -> None:
     validate(spec)
 
 
-def test_security_is_required_everywhere_except_health_and_login(spec: dict[str, Any]) -> None:
+def test_security_is_required_everywhere_except_the_public_operations(spec: dict[str, Any]) -> None:
     assert spec["components"]["securitySchemes"]["bearerAuth"] == {
         "type": "http",
         "scheme": "bearer",

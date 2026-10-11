@@ -1,6 +1,50 @@
 import { expect, test } from '@playwright/test'
 
 // Against the Prism mock: the data are the contract's examples (docs/api/openapi.json).
+// Prism answers POST /auth/refresh with the example token, so pages open signed in as the
+// example user (an operator); the sign-in test makes the refresh fail to start signed out.
+
+test('sign in with password and TOTP code', async ({ page }) => {
+  await page.route('**/api/v1/auth/refresh', (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ type: 'about:blank', title: 'Unauthorized', status: 401 }),
+    }),
+  )
+  let loginBody: unknown = null
+  await page.route('**/api/v1/auth/login', async (route) => {
+    loginBody = route.request().postDataJSON()
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'mfa_required', mfa_challenge: 'challenge', expires_in: 300 }),
+    })
+  })
+  await page.goto('/devices')
+  await expect(page).toHaveURL(/\/login\?next=%2Fdevices$/)
+  await page.getByLabel('Kullanıcı adı').fill('operator1')
+  await page.getByLabel('Parola').fill('example-password')
+  await page.getByRole('button', { name: 'Oturum aç' }).click()
+  expect(loginBody).toEqual({ username: 'operator1', password: 'example-password' })
+  await expect(page.getByRole('heading', { name: 'İki adımlı doğrulama' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Doğrulama kodu 1/6' }).click()
+  await page.keyboard.type('492039')
+  await page.getByRole('button', { name: 'Doğrula' }).click()
+  // Prism verifies the code with its example answer; back to the page asked for.
+  await expect(page).toHaveURL(/\/devices$/)
+  await expect(page.getByRole('button', { name: 'Hesap' })).toContainText('NOC Operator 1')
+})
+
+test('an operator sees no administration', async ({ page }) => {
+  await page.goto('/devices')
+  const nav = page.getByRole('navigation', { name: 'Ana menü' })
+  await expect(nav.getByRole('link', { name: 'Cihazlar', exact: true })).toBeVisible()
+  for (const name of ['Kullanıcılar', 'Kimlik profilleri', 'Denetim kaydı']) {
+    await expect(nav.getByRole('link', { name })).toHaveCount(0)
+  }
+  await page.goto('/admin/users')
+  await expect(page.getByRole('heading', { name: 'Bu sayfaya erişiminiz yok' })).toBeVisible()
+})
 
 test('the shell loads with navigation and the API health', async ({ page }) => {
   await page.goto('/')

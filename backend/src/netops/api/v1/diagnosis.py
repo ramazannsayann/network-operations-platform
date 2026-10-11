@@ -7,18 +7,18 @@ from fastapi import APIRouter, Query
 
 from netops.api.problems import not_implemented, problems
 from netops.api.schemas.diagnosis import ImpactAnalysis, PathTrace, PathTraceRequest
-from netops.api.security import AUTHENTICATED
+from netops.api.security import guard
 from netops.api.v1.common import At
+from netops.auth.rbac import Permission
 
 router = APIRouter(
     prefix="/diagnosis",
     tags=["diagnosis"],
-    dependencies=AUTHENTICATED,
-    responses=problems(401, 422, 501),
+    responses=problems(401, 403, 422, 501),
 )
 
 
-@router.post("/path-trace", responses=problems(404))
+@router.post("/path-trace", responses=problems(404), **guard(Permission.DIAGNOSIS_READ))
 async def trace_path(body: PathTraceRequest) -> PathTrace:
     """L2 and L3 hops from ``source`` to ``destination`` (at ``at``, default now).
 
@@ -28,7 +28,7 @@ async def trace_path(body: PathTraceRequest) -> PathTrace:
     raise not_implemented()
 
 
-@router.get("/impact", responses=problems(404))
+@router.get("/impact", responses=problems(404), **guard(Permission.DIAGNOSIS_READ))
 async def get_impact(
     device_id: Annotated[
         UUID | None, Query(description="Exactly one of device_id, link_id.")

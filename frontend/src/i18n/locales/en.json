@@ -13,7 +13,12 @@
     "soon": "soon",
     "toggle": "Toggle menu",
     "configChanges": "Config changes",
-    "events": "Events"
+    "events": "Events",
+    "users": "Users",
+    "credentials": "Credential profiles",
+    "audit": "Audit log",
+    "admin": "Administration",
+    "profile": "My profile"
   },
   "header": {
     "health": {
@@ -28,7 +33,8 @@
       "dark": "Dark theme",
       "auto": "System theme"
     },
-    "language": "Language"
+    "language": "Language",
+    "account": "Account"
   },
   "common": {
     "loading": "Loading…",
@@ -124,6 +130,16 @@
       "manual": "Manual",
       "pre_change": "Before change",
       "post_change": "After change"
+    },
+    "userRole": {
+      "admin": "Admin",
+      "operator": "Operator",
+      "viewer": "Viewer"
+    },
+    "auditOutcome": {
+      "success": "Success",
+      "denied": "Denied",
+      "failed": "Failed"
     }
   },
   "devices": {
@@ -272,7 +288,9 @@
       "duplicateNote": "Same chassis as {{device}} (same serial number)",
       "authFailedNote": "SSH login rejected ({{attempts}} attempts)",
       "unreachableNote": "Could not connect over SSH"
-    }
+    },
+    "readOnlyTitle": "View only",
+    "readOnly": "Your role cannot start discoveries; past runs are listed here."
   },
   "topology": {
     "title": "Map",
@@ -488,6 +506,178 @@
       "mnemonic": "Mnemonic",
       "message": "Message",
       "source": "Source IP"
+    }
+  },
+  "auth": {
+    "logout": "Sign out",
+    "signedInAs": "Signed in as {{name}} ({{username}})",
+    "forbidden": {
+      "title": "You cannot open this page",
+      "body": "Your role ({{role}}) lacks the permission this page needs ({{permission}})."
+    },
+    "login": {
+      "title": "Sign in",
+      "mfaTitle": "Two-factor authentication",
+      "username": "Username",
+      "password": "Password",
+      "submit": "Sign in",
+      "failed": "The username or password is wrong, or the account cannot sign in now.",
+      "rateLimited": "Too many attempts from this address; try again in a while.",
+      "wrongCode": "The code is wrong or was already used.",
+      "recoveryCode": "Recovery code",
+      "code": "Verification code",
+      "codeHelp": "The 6-digit code from your authenticator app.",
+      "verify": "Verify",
+      "useCode": "Use a verification code",
+      "useRecovery": "Use a recovery code",
+      "back": "Back"
+    }
+  },
+  "account": {
+    "title": "My profile",
+    "username": "Username",
+    "name": "Name",
+    "role": "Role",
+    "lastLogin": "Last sign-in",
+    "password": {
+      "title": "Password",
+      "current": "Current password",
+      "new": "New password",
+      "repeat": "New password (again)",
+      "policy": "At least {{min}} characters. A long sentence makes a good password; common passwords are refused.",
+      "mismatch": "The passwords differ.",
+      "changed": "Password changed.",
+      "otherSessions": "Changing it ends your other sessions.",
+      "submit": "Change password",
+      "errors": {
+        "too_short": "At least {{min}} characters are needed.",
+        "too_long": "At most 256 characters.",
+        "common": "This password is too common.",
+        "repetitive": "This password repeats itself.",
+        "sequence": "This password is a simple sequence.",
+        "contains_name": "The password must not contain your name.",
+        "unchanged": "The new password must differ from the current one.",
+        "wrong": "The current password is wrong.",
+        "other": "The password does not meet the rules."
+      }
+    },
+    "mfa": {
+      "title": "Two-factor authentication (TOTP)",
+      "on": "On",
+      "off": "Off",
+      "requiredForRole": "Two-factor authentication is required for your role.",
+      "optional": "Two-factor authentication is optional for your role; turning it on is recommended.",
+      "enable": "Turn on two-factor authentication",
+      "disable": "Turn off two-factor authentication",
+      "disableBody": "Turning it off needs your password and a verification or recovery code.",
+      "reset": "Set up again (e.g. new phone)",
+      "resetBody": "The current setup is removed and you set it up again right away, e.g. when moving to a new phone. This needs your password and a verification or recovery code.",
+      "codeOrRecovery": "Verification code or recovery code",
+      "codesOnce": "These recovery codes are shown only now. Each lets you sign in once if you cannot reach your phone; keep them somewhere safe.",
+      "copied": "Copied",
+      "copy": "Copy",
+      "download": "Download (.txt)",
+      "saved": "I have saved the recovery codes somewhere safe",
+      "finish": "Finish",
+      "step": {
+        "start": "Start",
+        "scan": "Add to the app",
+        "codes": "Recovery codes"
+      },
+      "intro": "Signing in will ask for a code from an authenticator app on your phone (e.g. Google Authenticator, Microsoft Authenticator, FreeOTP) in addition to your password.",
+      "begin": "Start the setup",
+      "scan": "Scan the QR code with your authenticator app.",
+      "qrAlt": "QR code for the authenticator app",
+      "manual": "If you cannot scan it, enter this key by hand:",
+      "enterCode": "Enter the 6-digit code the app shows:",
+      "codeLabel": "Verification code",
+      "confirm": "Verify and turn on"
+    },
+    "sessions": {
+      "title": "Active sessions",
+      "started": "Started",
+      "lastUsed": "Last used",
+      "address": "Address",
+      "browser": "Browser",
+      "current": "This session",
+      "end": "End",
+      "endThis": "End this session (sign out)"
+    },
+    "setup": {
+      "passwordTitle": "Change your password",
+      "passwordBody": "Your account was opened with a temporary password, or your password was reset. Choose a new one to go on.",
+      "mfaTitle": "Set up two-factor authentication",
+      "mfaBody": "Two-factor authentication is required for your role. Set it up before using the platform."
+    }
+  },
+  "admin": {
+    "users": {
+      "title": "Users",
+      "new": "New user",
+      "search": "Search users",
+      "username": "Username",
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "roleOf": "Role of {{username}}",
+      "state": "State",
+      "lastLogin": "Last sign-in",
+      "active": "Active",
+      "inactive": "Deactivated",
+      "locked": "Locked",
+      "mustChange": "Must change password",
+      "actionsFor": "Actions for {{username}}",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "resetMfa": "Reset two-factor authentication",
+      "resetPassword": "Reset password",
+      "resetPasswordBody": "{{username}} will have to change the password at the next sign-in; their sessions end.",
+      "resetOptional": "Optional: set a temporary password if the user forgot theirs.",
+      "unlock": "Unlock",
+      "temporaryPassword": "Temporary password",
+      "temporaryHelp": "The user must change it at the first sign-in; at least 12 characters.",
+      "usernameRule": "3-64 characters: lower-case letters, digits and . _ @ -",
+      "create": "Create"
+    },
+    "credentials": {
+      "title": "Credential profiles",
+      "subtitle": "The accounts used to reach devices. Secret fields are write-only: once stored they are never shown.",
+      "new": "New profile",
+      "edit": "Edit",
+      "name": "Profile name",
+      "kind": "Kind",
+      "username": "Username",
+      "password": "Password",
+      "enableSecret": "Enable secret",
+      "clearEnable": "Remove the stored enable secret",
+      "authProtocol": "Authentication protocol",
+      "privProtocol": "Privacy protocol",
+      "authKey": "Authentication key",
+      "privKey": "Privacy key",
+      "writeOnly": "Stored encrypted, never shown again.",
+      "stored": "The stored value is not shown; leave empty to keep it.",
+      "keep": "Type to replace",
+      "optional": "Optional.",
+      "usedBy_one": "{{count}} device uses this profile.",
+      "usedBy_other": "{{count}} devices use this profile.",
+      "delete": "Delete",
+      "save": "Save",
+      "create": "Create"
+    },
+    "audit": {
+      "title": "Audit log",
+      "subtitle": "Sign-ins, denied requests and every administrative action; entries cannot be changed or deleted.",
+      "count_one": "{{count}} entry",
+      "count_other": "{{count}} entries",
+      "actor": "User",
+      "actorPlaceholder": "username",
+      "action": "Action",
+      "outcome": "Outcome",
+      "when": "When",
+      "address": "Address",
+      "target": "Target",
+      "details": "Details",
+      "noActor": "anonymous / server (CLI)"
     }
   }
 }

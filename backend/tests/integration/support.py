@@ -7,14 +7,16 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
+from netops.auth.passwords import hash_password
 from netops.core.secrets import Secret
 from netops.core.settings import get_settings
 from netops.db import models as m
-from netops.db.enums import CredentialKind
+from netops.db.enums import CredentialKind, UserRole
 from netops.db.session import create_engine
 
 FAKELAB_TOPOLOGY = Path(__file__).resolve().parents[3] / "lab" / "fakelab" / "topology.yaml"
@@ -50,10 +52,50 @@ def run[T](make: Callable[[AsyncSession], Awaitable[T]]) -> T:
 
 async def clear_inventory(session: AsyncSession) -> None:
     """Delete every device (cascading to interfaces, links and collection runs), discovery
-    run, job and credential profile, for tests that need an empty inventory."""
-    for model in (m.DiscoveryRun, m.Job, m.Device, m.CredentialProfile):
+    run, job, credential profile and user, for tests that need an empty inventory. The
+    audit log stays: it is append-only."""
+    for model in (m.DiscoveryRun, m.Job, m.Device, m.CredentialProfile, m.User):
         await session.execute(delete(model))
     await session.commit()
+
+
+ADMIN = "test-admin"
+ADMIN_PASSWORD = "admin pass phrase " + secrets.token_hex(6)  # random per run
+
+
+async def add_user(
+    session: AsyncSession,
+    username: str,
+    role: UserRole,
+    password: str,
+    *,
+    mfa_secret: str | None = None,
+    must_change_password: bool = False,
+) -> uuid.UUID:
+    """A user straight into the database (bypassing the policy checks of the API)."""
+    user = m.User(
+        id=uuid.uuid4(),
+        username=username,
+        display_name=username,
+        role=role,
+        password_hash=hash_password(password),
+        mfa_enabled=mfa_secret is not None,
+        mfa_secret=Secret(mfa_secret) if mfa_secret else None,
+        must_change_password=must_change_password,
+    )
+    session.add(user)
+    await session.commit()
+    return user.id
+
+
+def sign_in(client: TestClient, username: str, password: str) -> dict[str, Any]:
+    """POST /auth/login (no MFA); sets the bearer header on ``client``."""
+    response = client.post("/api/v1/auth/login", json={"username": username, "password": password})
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    assert body["status"] == "authenticated", body
+    client.headers["Authorization"] = f"Bearer {body['access_token']}"
+    return body
 
 
 async def create_lab_profiles(session: AsyncSession) -> list[uuid.UUID]:

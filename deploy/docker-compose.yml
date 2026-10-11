@@ -29,6 +29,10 @@ x-backend: &backend
     POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
     # Encrypts stored device credentials (ADR-0004); the backend refuses to start without it.
     CREDENTIALS_KEY: ${CREDENTIALS_KEY:?set CREDENTIALS_KEY in deploy/.env (make up generates one)}
+    # Signs access tokens (ADR-0008); the API refuses to start without it.
+    AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:?set AUTH_SIGNING_KEY in deploy/.env (make env generates one)}
+    AUTH_MFA_REQUIRED_ROLES: ${AUTH_MFA_REQUIRED_ROLES-admin,operator}
+    AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-auto}
     REDIS_URL: redis://redis:6379/0
     CELERY_BROKER_URL: redis://redis:6379/1
     CELERY_RESULT_BACKEND: redis://redis:6379/2

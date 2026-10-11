@@ -6,12 +6,11 @@ from fastapi import APIRouter, Query
 
 from netops.api.problems import not_implemented, problems
 from netops.api.schemas.hosts import FOUND_EXAMPLE, NOT_FOUND_EXAMPLE, HostLocateResult
-from netops.api.security import AUTHENTICATED
+from netops.api.security import guard
 from netops.api.v1.common import At
+from netops.auth.rbac import Permission
 
-router = APIRouter(
-    prefix="/hosts", tags=["hosts"], dependencies=AUTHENTICATED, responses=problems(401, 422, 501)
-)
+router = APIRouter(prefix="/hosts", tags=["hosts"], responses=problems(401, 403, 422, 501))
 
 _EXAMPLES: dict[int | str, dict[str, Any]] = {
     200: {
@@ -28,7 +27,12 @@ _EXAMPLES: dict[int | str, dict[str, Any]] = {
 }
 
 
-@router.get("/locate", responses=_EXAMPLES, response_model=HostLocateResult)
+@router.get(
+    "/locate",
+    responses=_EXAMPLES,
+    response_model=HostLocateResult,
+    **guard(Permission.DIAGNOSIS_READ),
+)
 async def locate_host(
     query: Annotated[
         str,

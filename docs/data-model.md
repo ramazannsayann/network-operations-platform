@@ -274,6 +274,57 @@ erDiagram
     }
 ```
 
+## Users, sessions and audit
+
+Accounts, sign-in sessions and the audit log of M7
+([ADR-0008](adr/0008-authentication.md)). `audit_log` has no foreign keys: its rows must
+never change, not even when a referenced row does.
+
+```mermaid
+erDiagram
+    users ||--o{ mfa_recovery_codes : "can recover with"
+    users ||--o{ refresh_tokens : "signed in with"
+    refresh_tokens |o--o| refresh_tokens : "replaced by"
+
+    users {
+        uuid id PK
+        text username "unique, lower-case"
+        user_role role
+        bool is_active
+        text password_hash "argon2id"
+        bool mfa_enabled
+        bytea mfa_secret_encrypted "Fernet"
+        int failed_login_count
+        timestamptz locked_until
+    }
+    mfa_recovery_codes {
+        uuid id PK
+        uuid user_id FK
+        text code_hash "sha256"
+        timestamptz used_at
+    }
+    refresh_tokens {
+        uuid id PK
+        uuid user_id FK
+        uuid family_id "one sign-in session"
+        text token_hash "sha256, unique"
+        timestamptz expires_at
+        timestamptz revoked_at
+        uuid replaced_by FK
+    }
+    audit_log {
+        bigint id PK
+        timestamptz at
+        uuid actor_user_id "no FK"
+        inet actor_ip
+        text action
+        text target_type
+        text target_id
+        audit_outcome outcome
+        jsonb details "never secrets"
+    }
+```
+
 ## Tables
 
 ### Entities
@@ -289,7 +340,7 @@ erDiagram
 | `links` | Physical links between two interfaces, stored once (a < b), from CDP/LLDP, inference or manual entry; inactive once no longer reported. |
 | `jobs` | Long-running operations started through the API (device refresh, discovery): status, progress, error. |
 | `discovery_runs` | One discovery run: seeds, allowed subnets, credential profiles, progress counters. |
-| `topology_positions` | Saved node positions of the topology map per layer (one global layout until M7). |
+| `topology_positions` | Saved node positions of the topology map per layer (one global layout, shared by all users). |
 | `discovery_run_items` | What a run did with each address: discovered, duplicate, auth_failed, unreachable, out_of_scope, unsupported_platform, no_mgmt_ip. |
 | `collection_runs` | One row per collector execution: device, kind, trigger, status and timing; defines point-in-time state. |
 | `alarms` | Problems with a lifecycle (open → acknowledged → cleared), deduplicated per `dedup_key`. |
@@ -297,6 +348,10 @@ erDiagram
 | `config_versions` | Distinct device configurations: Git commit, normalized-content hash, size; the text is in the local Git repository ([ADR-0007](adr/0007-config-management.md)). |
 | `config_changes` | Configuration changes made through the platform or outside it, with user, source IP and (redacted) commands; `detected_at` is the first syslog message of the change, or the backup that found it. |
 | `findings` | Diagnosis results: root-cause candidates with explanation, evidence chain and score. |
+| `users` | Accounts: username, role (admin, operator, viewer), argon2id password hash, MFA state with the encrypted TOTP secret, lockout counters. Deactivated, never deleted. |
+| `mfa_recovery_codes` | Ten single-use recovery codes per MFA enrollment, stored as sha256. |
+| `refresh_tokens` | Refresh tokens (sha256) by session (`family_id`); rotated on every use, a reused one revokes its family. |
+| `audit_log` | Append-only record of sign-ins, failures, denials and changes (bigint identity id); triggers reject UPDATE, DELETE and TRUNCATE. |
 
 ### Observations (hypertables)
 
@@ -330,4 +385,6 @@ Which commands each kind runs, and which of them are required, is defined in
 | `routes`, `hsrp_groups` | `route_entries`, `hsrp_observations` |
 | `svis` | `interfaces` with `kind = 'svi'` plus `interface_addresses` |
 | `changes` | `config_changes` |
-| `users`, `credentials`, `audit_log` | deferred to M7 |
+| `users` | `users` (plus `mfa_recovery_codes`, `refresh_tokens`) |
+| `credentials` | `credential_profiles` |
+| `audit_log` | `audit_log` |

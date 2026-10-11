@@ -56,7 +56,7 @@
           "auth"
         ],
         "summary": "Login",
-        "description": "Exchange username and password for a bearer token.",
+        "description": "Sign in with username and password. With MFA enabled the answer is\n``mfa_required`` and a challenge for POST /auth/mfa/verify. Every failure (unknown\nuser, wrong password, locked or deactivated account) gets the same 401.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -78,11 +78,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Token"
+                  "$ref": "#/components/schemas/LoginResponse"
                 },
                 "example": {
                   "access_token": "<JWT>",
-                  "expires_in": 3600,
+                  "expires_in": 900,
+                  "requirements": [],
+                  "status": "authenticated",
                   "token_type": "bearer"
                 }
               }
@@ -114,24 +116,214 @@
               }
             }
           },
-          "501": {
-            "description": "Part of the contract, not implemented yet",
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/Problem"
                 },
                 "example": {
-                  "type": "urn:netops:problem:not-implemented",
-                  "title": "Not Implemented",
-                  "status": 501,
-                  "detail": "This endpoint is part of the API contract but is not implemented yet."
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts from this address; see Retry-After",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:rate-limited",
+                  "title": "Too Many Requests",
+                  "status": 429,
+                  "detail": "Too many attempts from this address; try again in 120 s."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify Mfa",
+        "description": "Complete a sign-in with a TOTP code or a recovery code (each usable once).\nFailures count towards the account lockout.",
+        "operationId": "verify_mfa",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaVerifyRequest"
+              },
+              "example": {
+                "code": "492039",
+                "mfa_challenge": "<challenge>"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessToken"
+                },
+                "example": {
+                  "access_token": "<JWT>",
+                  "expires_in": 900,
+                  "requirements": [],
+                  "token_type": "bearer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
                 }
               }
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts from this address; see Retry-After",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:rate-limited",
+                  "title": "Too Many Requests",
+                  "status": 429,
+                  "detail": "Too many attempts from this address; try again in 120 s."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh",
+        "description": "A new access token for the refresh cookie, which is rotated. Presenting a refresh\ntoken that was already used ends the whole session (and is audited).",
+        "operationId": "refresh",
+        "parameters": [
+          {
+            "name": "netops_refresh",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Set by login, MFA verification and refresh (HttpOnly; never readable by scripts).",
+              "title": "Netops Refresh"
+            },
+            "description": "Set by login, MFA verification and refresh (HttpOnly; never readable by scripts)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessToken"
+                },
+                "example": {
+                  "access_token": "<JWT>",
+                  "expires_in": 900,
+                  "requirements": [],
+                  "token_type": "bearer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -149,13 +341,92 @@
         }
       }
     },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "description": "End this session: its refresh tokens are revoked and the cookie cleared.",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-permission": "profile:self"
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [
           "auth"
         ],
         "summary": "Get Current User",
-        "description": "The user the bearer token belongs to.",
+        "description": "The signed-in user, the permissions of their role and what the session must do\nfirst (``requirements``).",
         "operationId": "get_current_user",
         "responses": {
           "200": {
@@ -167,7 +438,34 @@
                 },
                 "example": {
                   "display_name": "NOC Operator 1",
+                  "email": "operator1@example.net",
+                  "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                  "last_login_at": "2026-10-11T07:58:12Z",
+                  "mfa_enabled": true,
+                  "mfa_required": true,
+                  "password_changed_at": "2026-09-30T09:12:00Z",
+                  "permissions": [
+                    "alarms:ack",
+                    "alarms:read",
+                    "configs:backup",
+                    "configs:read",
+                    "credentials:read",
+                    "devices:read",
+                    "devices:refresh",
+                    "diagnosis:read",
+                    "discovery:read",
+                    "discovery:run",
+                    "events:read",
+                    "jobs:read",
+                    "locations:read",
+                    "metrics:read",
+                    "profile:self",
+                    "topology:layout:write",
+                    "topology:read"
+                  ],
+                  "requirements": [],
                   "role": "operator",
+                  "session_id": "5e0c7a1d-0000-4000-8000-000000007101",
                   "username": "operator1"
                 }
               }
@@ -199,24 +497,8 @@
               }
             }
           },
-          "501": {
-            "description": "Part of the contract, not implemented yet",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                },
-                "example": {
-                  "type": "urn:netops:problem:not-implemented",
-                  "title": "Not Implemented",
-                  "status": 501,
-                  "detail": "This endpoint is part of the API contract but is not implemented yet."
-                }
-              }
-            }
-          },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -230,13 +512,669 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
           }
         },
         "security": [
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "x-required-permission": "profile:self"
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change Password",
+        "description": "Change the own password (the current one is required). Every other session of the\nuser ends.",
+        "operationId": "change_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChange"
+              },
+              "example": {
+                "current_password": "example-current",
+                "new_password": "a long new pass phrase"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-permission": "profile:self"
+      }
+    },
+    "/api/v1/auth/mfa/enroll": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Begin Mfa Enrollment",
+        "description": "Start TOTP enrollment: a new secret (as text, otpauth URI and QR code). MFA is on\nonly after POST /auth/mfa/enroll/confirm.",
+        "operationId": "begin_mfa_enrollment",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrollment"
+                },
+                "example": {
+                  "otpauth_uri": "otpauth://totp/NetOps:operator1?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=NetOps",
+                  "qr_svg": "data:image/svg+xml,...",
+                  "secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-permission": "profile:self"
+      }
+    },
+    "/api/v1/auth/mfa/enroll/confirm": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Confirm Mfa Enrollment",
+        "description": "Turn MFA on with a code from the authenticator. Returns ten single-use recovery\ncodes; they are shown only now.",
+        "operationId": "confirm_mfa_enrollment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCode"
+              },
+              "example": {
+                "code": "492039"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodes"
+                },
+                "example": {
+                  "recovery_codes": [
+                    "k7mfp-2wq9x",
+                    "r3hjt-8vbna"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-permission": "profile:self"
+      }
+    },
+    "/api/v1/auth/mfa/disable": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Disable Mfa",
+        "description": "Turn MFA off (password and a code needed). Where the policy requires MFA for the\nrole, the session can then only enroll again.",
+        "operationId": "disable_mfa",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaDisable"
+              },
+              "example": {
+                "code": "492039",
+                "password": "example-password"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-permission": "profile:self"
+      }
+    },
+    "/api/v1/auth/sessions": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List Sessions",
+        "description": "The user's own active sessions (sign-ins that can still be refreshed).",
+        "operationId": "list_sessions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "current": true,
+                      "expires_at": "2026-10-11T21:43:05Z",
+                      "id": "5e0c7a1d-0000-4000-8000-000000007101",
+                      "ip": "10.0.0.250",
+                      "last_used_at": "2026-10-11T09:43:05Z",
+                      "started_at": "2026-10-11T07:58:12Z",
+                      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) Firefox/131.0"
+                    }
+                  ],
+                  "limit": 50,
+                  "offset": 0,
+                  "total": 1
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-permission": "profile:self"
+      }
+    },
+    "/api/v1/auth/sessions/{session_id}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Revoke Session",
+        "description": "End one of the own sessions (e.g. a forgotten browser elsewhere).",
+        "operationId": "revoke_session",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "profile:self"
       }
     },
     "/api/v1/locations": {
@@ -371,7 +1309,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -382,6 +1320,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -428,7 +1382,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "locations:read"
       },
       "post": {
         "tags": [
@@ -481,7 +1436,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -492,6 +1447,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -554,7 +1525,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "locations:manage"
       }
     },
     "/api/v1/locations/{location_id}": {
@@ -603,7 +1575,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -614,6 +1586,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -676,7 +1664,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "locations:read"
       },
       "patch": {
         "tags": [
@@ -737,7 +1726,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -748,6 +1737,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -826,7 +1831,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "locations:manage"
       },
       "delete": {
         "tags": [
@@ -857,7 +1863,7 @@
             "description": "Successful Response"
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -868,6 +1874,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -946,7 +1968,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "locations:manage"
       }
     },
     "/api/v1/devices": {
@@ -1195,7 +2218,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1206,6 +2229,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -1252,7 +2291,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "devices:read"
       }
     },
     "/api/v1/devices/{device_id}": {
@@ -1339,7 +2379,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1350,6 +2390,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -1412,7 +2468,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "devices:read"
       }
     },
     "/api/v1/devices/{device_id}/refresh": {
@@ -1421,7 +2478,7 @@
           "devices"
         ],
         "summary": "Refresh Device",
-        "description": "Collect the device's state now (\"refresh now\"). 409 if it is not managed.",
+        "description": "Collect the device's state now (\"refresh now\"). 409 if it is not managed.\nCollecting ``config`` (a configuration backup) also needs ``configs:backup``.",
         "operationId": "refresh_device",
         "security": [
           {
@@ -1491,7 +2548,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1502,6 +2559,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -1580,7 +2653,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "devices:refresh"
       }
     },
     "/api/v1/devices/{device_id}/interfaces": {
@@ -1773,7 +2847,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1784,6 +2858,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -1846,7 +2936,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "devices:read"
       }
     },
     "/api/v1/interfaces/{interface_id}": {
@@ -1953,7 +3044,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1964,6 +3055,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -2026,7 +3133,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "devices:read"
       }
     },
     "/api/v1/discovery/runs": {
@@ -2090,7 +3198,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2101,6 +3209,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -2163,7 +3287,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "discovery:run"
       },
       "get": {
         "tags": [
@@ -2271,7 +3396,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2282,6 +3407,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -2328,7 +3469,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "discovery:read"
       }
     },
     "/api/v1/discovery/runs/{run_id}": {
@@ -2457,7 +3599,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2468,6 +3610,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -2530,7 +3688,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "discovery:read"
       }
     },
     "/api/v1/topology": {
@@ -2807,7 +3966,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2818,6 +3977,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -2864,7 +4039,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "topology:read"
       }
     },
     "/api/v1/topology/changes": {
@@ -2972,7 +4148,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2983,6 +4159,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -3029,7 +4221,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "topology:read"
       }
     },
     "/api/v1/topology/layout": {
@@ -3038,7 +4231,7 @@
           "topology"
         ],
         "summary": "Get Topology Layout",
-        "description": "Saved node positions of a map (one layout for everyone until M7 adds users).",
+        "description": "Saved node positions of a map (one layout shared by everyone).",
         "operationId": "get_topology_layout",
         "security": [
           {
@@ -3086,7 +4279,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3097,6 +4290,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -3143,7 +4352,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "topology:read"
       },
       "put": {
         "tags": [
@@ -3222,7 +4432,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3233,6 +4443,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -3279,7 +4505,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "topology:layout:write"
       }
     },
     "/api/v1/hosts/locate": {
@@ -3475,7 +4702,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3486,6 +4713,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -3532,7 +4775,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "diagnosis:read"
       }
     },
     "/api/v1/diagnosis/path-trace": {
@@ -3659,7 +4903,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3670,6 +4914,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -3737,7 +4997,8 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "x-required-permission": "diagnosis:read"
       }
     },
     "/api/v1/diagnosis/impact": {
@@ -3847,7 +5108,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3858,6 +5119,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -3920,7 +5197,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "diagnosis:read"
       }
     },
     "/api/v1/alarms": {
@@ -4175,7 +5453,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4186,6 +5464,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -4232,7 +5526,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "alarms:read"
       }
     },
     "/api/v1/alarms/{alarm_id}": {
@@ -4307,7 +5602,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4318,6 +5613,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -4380,7 +5691,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "alarms:read"
       }
     },
     "/api/v1/alarms/{alarm_id}/acknowledge": {
@@ -4476,7 +5788,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4487,6 +5799,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -4565,7 +5893,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "alarms:ack"
       }
     },
     "/api/v1/incidents": {
@@ -4708,7 +6037,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4719,6 +6048,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -4765,7 +6110,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "alarms:read"
       }
     },
     "/api/v1/incidents/{incident_id}": {
@@ -4986,7 +6332,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4997,6 +6343,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -5059,7 +6421,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "alarms:read"
       }
     },
     "/api/v1/findings": {
@@ -5265,7 +6628,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5276,6 +6639,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -5322,7 +6701,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "alarms:read"
       }
     },
     "/api/v1/metrics": {
@@ -5490,7 +6870,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5501,6 +6881,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -5563,7 +6959,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "metrics:read"
       }
     },
     "/api/v1/events": {
@@ -5798,7 +7195,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5809,6 +7206,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -5855,7 +7268,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "events:read"
       }
     },
     "/api/v1/config-backups": {
@@ -5990,7 +7404,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6001,6 +7415,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -6047,7 +7477,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "configs:read"
       }
     },
     "/api/v1/devices/{device_id}/configs": {
@@ -6191,7 +7622,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6202,6 +7633,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -6264,7 +7711,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "configs:read"
       }
     },
     "/api/v1/configs/diff": {
@@ -6353,7 +7801,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6364,6 +7812,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -6442,7 +7906,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "configs:read"
       }
     },
     "/api/v1/configs/{version_id}": {
@@ -6492,7 +7957,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6503,6 +7968,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -6581,7 +8062,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "configs:read"
       }
     },
     "/api/v1/config-changes": {
@@ -6786,7 +8268,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6797,6 +8279,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -6843,7 +8341,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "configs:read"
       }
     },
     "/api/v1/jobs/{job_id}": {
@@ -6895,7 +8394,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6906,6 +8405,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -6968,7 +8483,8 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "jobs:read"
       }
     },
     "/api/v1/credential-profiles": {
@@ -6977,7 +8493,7 @@
           "credentials"
         ],
         "summary": "List Credential Profiles",
-        "description": "Profiles by name, e.g. to choose the ones a discovery run tries. Only id, name and\nkind: usernames and secrets stay in the database (add profiles with ``netops\ncredentials add``).",
+        "description": "Profiles by name, e.g. to choose the ones a discovery run tries. Only id, name and\nkind.",
         "operationId": "list_credential_profiles",
         "security": [
           {
@@ -7061,7 +8577,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer token",
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7072,6 +8588,22 @@
                   "title": "Unauthorized",
                   "status": 401,
                   "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
                 }
               }
             }
@@ -7102,12 +8634,2001 @@
               }
             }
           }
-        }
+        },
+        "x-required-permission": "credentials:read"
+      },
+      "post": {
+        "tags": [
+          "credentials"
+        ],
+        "summary": "Create Credential Profile",
+        "description": "Create a profile. The secrets are stored encrypted and never returned.",
+        "operationId": "create_credential_profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialProfileCreate"
+              },
+              "example": {
+                "kind": "ssh",
+                "name": "campus-ro",
+                "password": "example",
+                "username": "netops-ro"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialProfile"
+                },
+                "example": {
+                  "created_at": "2026-09-01T08:00:00Z",
+                  "devices": 42,
+                  "enable_secret_set": false,
+                  "id": "5e0c7a1d-0000-4000-8000-000000008001",
+                  "kind": "ssh",
+                  "name": "campus-ro",
+                  "updated_at": "2026-10-02T13:20:00Z",
+                  "username": "netops-ro"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "credentials:manage"
+      }
+    },
+    "/api/v1/credential-profiles/{profile_id}": {
+      "get": {
+        "tags": [
+          "credentials"
+        ],
+        "summary": "Get Credential Profile",
+        "description": "A profile without its secrets.",
+        "operationId": "get_credential_profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialProfile"
+                },
+                "example": {
+                  "created_at": "2026-09-01T08:00:00Z",
+                  "devices": 42,
+                  "enable_secret_set": false,
+                  "id": "5e0c7a1d-0000-4000-8000-000000008001",
+                  "kind": "ssh",
+                  "name": "campus-ro",
+                  "updated_at": "2026-10-02T13:20:00Z",
+                  "username": "netops-ro"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "credentials:manage"
+      },
+      "patch": {
+        "tags": [
+          "credentials"
+        ],
+        "summary": "Update Credential Profile",
+        "description": "Change a profile; a secret is replaced only when it is sent.",
+        "operationId": "update_credential_profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialProfileUpdate"
+              },
+              "example": {
+                "password": "example-new"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialProfile"
+                },
+                "example": {
+                  "created_at": "2026-09-01T08:00:00Z",
+                  "devices": 42,
+                  "enable_secret_set": false,
+                  "id": "5e0c7a1d-0000-4000-8000-000000008001",
+                  "kind": "ssh",
+                  "name": "campus-ro",
+                  "updated_at": "2026-10-02T13:20:00Z",
+                  "username": "netops-ro"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "credentials:manage"
+      },
+      "delete": {
+        "tags": [
+          "credentials"
+        ],
+        "summary": "Delete Credential Profile",
+        "description": "Delete a profile no device uses (409 otherwise).",
+        "operationId": "delete_credential_profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "credentials:manage"
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "List Users",
+        "description": "Users; ``q`` searches username, display name and email.",
+        "operationId": "list_users",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive text search.",
+              "title": "Q"
+            },
+            "description": "Case-insensitive text search."
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserRole"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "username",
+                "-username",
+                "last_login_at",
+                "-last_login_at"
+              ],
+              "type": "string",
+              "default": "username",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Page size (1-500).",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Page size (1-500)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of items to skip.",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Number of items to skip."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "created_at": "2026-09-01T08:00:00Z",
+                      "display_name": "NOC Operator 1",
+                      "email": "operator1@example.net",
+                      "failed_login_count": 0,
+                      "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                      "is_active": true,
+                      "last_login_at": "2026-10-11T07:58:12Z",
+                      "mfa_enabled": true,
+                      "must_change_password": false,
+                      "password_changed_at": "2026-09-30T09:12:00Z",
+                      "role": "operator",
+                      "username": "operator1"
+                    },
+                    {
+                      "created_at": "2026-09-01T08:00:00Z",
+                      "display_name": "Helpdesk",
+                      "failed_login_count": 0,
+                      "id": "5e0c7a1d-0000-4000-8000-000000007003",
+                      "is_active": true,
+                      "mfa_enabled": false,
+                      "must_change_password": false,
+                      "password_changed_at": "2026-09-30T09:12:00Z",
+                      "role": "viewer",
+                      "username": "helpdesk"
+                    }
+                  ],
+                  "limit": 50,
+                  "offset": 0,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      },
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Create User",
+        "description": "Create a user with a temporary password, to be changed at the first sign-in.",
+        "operationId": "create_user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              },
+              "example": {
+                "display_name": "NOC Operator 2",
+                "email": "operator2@example.net",
+                "password": "a temporary pass phrase",
+                "role": "operator",
+                "username": "operator2"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "example": {
+                  "created_at": "2026-09-01T08:00:00Z",
+                  "display_name": "NOC Operator 1",
+                  "email": "operator1@example.net",
+                  "failed_login_count": 0,
+                  "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                  "is_active": true,
+                  "last_login_at": "2026-10-11T07:58:12Z",
+                  "mfa_enabled": true,
+                  "must_change_password": false,
+                  "password_changed_at": "2026-09-30T09:12:00Z",
+                  "role": "operator",
+                  "username": "operator1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get User",
+        "operationId": "get_user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "example": {
+                  "created_at": "2026-09-01T08:00:00Z",
+                  "display_name": "NOC Operator 1",
+                  "email": "operator1@example.net",
+                  "failed_login_count": 0,
+                  "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                  "is_active": true,
+                  "last_login_at": "2026-10-11T07:58:12Z",
+                  "mfa_enabled": true,
+                  "must_change_password": false,
+                  "password_changed_at": "2026-09-30T09:12:00Z",
+                  "role": "operator",
+                  "username": "operator1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update User",
+        "description": "Change display name, email, role or active state. The last active admin cannot be\ndemoted or deactivated.",
+        "operationId": "update_user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              },
+              "example": {
+                "role": "viewer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "example": {
+                  "created_at": "2026-09-01T08:00:00Z",
+                  "display_name": "NOC Operator 1",
+                  "email": "operator1@example.net",
+                  "failed_login_count": 0,
+                  "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                  "is_active": true,
+                  "last_login_at": "2026-10-11T07:58:12Z",
+                  "mfa_enabled": true,
+                  "must_change_password": false,
+                  "password_changed_at": "2026-09-30T09:12:00Z",
+                  "role": "operator",
+                  "username": "operator1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      }
+    },
+    "/api/v1/users/{user_id}/deactivate": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Deactivate User",
+        "description": "Deactivate a user (users are never deleted) and end their sessions.",
+        "operationId": "deactivate_user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "example": {
+                  "created_at": "2026-09-01T08:00:00Z",
+                  "display_name": "NOC Operator 1",
+                  "email": "operator1@example.net",
+                  "failed_login_count": 0,
+                  "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                  "is_active": true,
+                  "last_login_at": "2026-10-11T07:58:12Z",
+                  "mfa_enabled": true,
+                  "must_change_password": false,
+                  "password_changed_at": "2026-09-30T09:12:00Z",
+                  "role": "operator",
+                  "username": "operator1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current state of the resource",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "The request conflicts with the current state of the resource."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      }
+    },
+    "/api/v1/users/{user_id}/reset-mfa": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Reset User Mfa",
+        "description": "Remove the user's authenticator and recovery codes (lost phone) and end their\nsessions; they enroll again at the next sign-in where the policy requires MFA.",
+        "operationId": "reset_user_mfa",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      }
+    },
+    "/api/v1/users/{user_id}/reset-password": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Reset User Password",
+        "description": "Force a password change at the next sign-in, optionally setting a temporary\npassword; ends the user's sessions.",
+        "operationId": "reset_user_password",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordReset"
+              },
+              "example": {
+                "temporary_password": "a temporary pass phrase"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      }
+    },
+    "/api/v1/users/{user_id}/unlock": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Unlock User",
+        "description": "Lift a lockout after failed sign-ins.",
+        "operationId": "unlock_user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not Found",
+                  "status": 404,
+                  "detail": "The requested resource does not exist."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "users:manage"
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "List Audit Entries",
+        "description": "Audit entries, newest first; ``from``/``to`` filter on ``at``.",
+        "operationId": "list_audit_entries",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "actor_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Actor's username.",
+              "title": "Actor"
+            },
+            "description": "Actor's username."
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "e.g. \"auth.login\"; a trailing \".*\" matches a prefix (\"auth.*\").",
+              "title": "Action"
+            },
+            "description": "e.g. \"auth.login\"; a trailing \".*\" matches a prefix (\"auth.*\")."
+          },
+          {
+            "name": "target_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditOutcome"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start of the time range, inclusive (ISO 8601).",
+              "title": "From"
+            },
+            "description": "Start of the time range, inclusive (ISO 8601)."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the time range, exclusive (ISO 8601). Defaults to now.",
+              "title": "To"
+            },
+            "description": "End of the time range, exclusive (ISO 8601). Defaults to now."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "at",
+                "-at"
+              ],
+              "type": "string",
+              "default": "-at",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Page size (1-500).",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Page size (1-500)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of items to skip.",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Number of items to skip."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "action": "access.denied",
+                      "actor": {
+                        "id": "5e0c7a1d-0000-4000-8000-000000007003",
+                        "username": "helpdesk"
+                      },
+                      "actor_ip": "10.0.0.251",
+                      "at": "2026-10-11T08:02:40Z",
+                      "details": {
+                        "permission": "discovery:run",
+                        "reason": "missing_permission",
+                        "role": "viewer"
+                      },
+                      "id": 4215,
+                      "outcome": "denied",
+                      "target_id": "POST /api/v1/discovery/runs",
+                      "target_type": "route"
+                    },
+                    {
+                      "action": "auth.login",
+                      "actor": {
+                        "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                        "username": "operator1"
+                      },
+                      "actor_ip": "10.0.0.250",
+                      "at": "2026-10-11T07:58:12Z",
+                      "details": {
+                        "mfa": "totp"
+                      },
+                      "id": 4211,
+                      "outcome": "success"
+                    }
+                  ],
+                  "limit": 50,
+                  "offset": 0,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token, or failed sign-in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "A valid bearer token is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user's role lacks the permission, or the session must first change its password or enroll in MFA",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "Your role (viewer) does not have the permission devices:refresh."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (see the `errors` member)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:netops:problem:validation-error",
+                  "title": "Unprocessable Entity",
+                  "errors": [
+                    {
+                      "loc": [
+                        "query",
+                        "limit"
+                      ],
+                      "msg": "Input should be less than or equal to 500",
+                      "type": "less_than_equal"
+                    }
+                  ],
+                  "status": 422,
+                  "detail": "The request is invalid; see errors."
+                }
+              }
+            }
+          }
+        },
+        "x-required-permission": "audit:read"
       }
     }
   },
   "components": {
     "schemas": {
+      "AccessToken": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "const": "bearer",
+            "title": "Token Type"
+          },
+          "expires_in": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Expires In"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            },
+            "type": "array",
+            "title": "Requirements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "requirements"
+        ],
+        "title": "AccessToken",
+        "examples": [
+          {
+            "access_token": "<JWT>",
+            "expires_in": 900,
+            "requirements": [],
+            "token_type": "bearer"
+          }
+        ]
+      },
       "Aggregation": {
         "type": "string",
         "enum": [
@@ -7432,6 +10953,224 @@
           "cleared"
         ],
         "title": "AlarmState"
+      },
+      "AuditActor": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "NULL if the user no longer exists."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "AuditActor",
+        "examples": [
+          {
+            "id": "5e0c7a1d-0000-4000-8000-000000007002",
+            "username": "operator1"
+          }
+        ]
+      },
+      "AuditEntry": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuditActor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "NULL for anonymous attempts (unknown user) and the server CLI."
+          },
+          "actor_ip": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "ipvanyaddress"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Ip"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "description": "e.g. \"auth.login\", \"user.update\", \"access.denied\"."
+          },
+          "target_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Type"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/AuditOutcome"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "actor_ip",
+          "action",
+          "target_type",
+          "target_id",
+          "outcome",
+          "details"
+        ],
+        "title": "AuditEntry",
+        "examples": [
+          {
+            "action": "auth.login",
+            "actor": {
+              "id": "5e0c7a1d-0000-4000-8000-000000007002",
+              "username": "operator1"
+            },
+            "actor_ip": "10.0.0.250",
+            "at": "2026-10-11T07:58:12Z",
+            "details": {
+              "mfa": "totp"
+            },
+            "id": 4211,
+            "outcome": "success"
+          }
+        ]
+      },
+      "AuditOutcome": {
+        "type": "string",
+        "enum": [
+          "success",
+          "denied",
+          "failed"
+        ],
+        "title": "AuditOutcome"
+      },
+      "AuditPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "description": "Number of items matching the filters, all pages."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "AuditPage",
+        "examples": [
+          {
+            "items": [
+              {
+                "action": "access.denied",
+                "actor": {
+                  "id": "5e0c7a1d-0000-4000-8000-000000007003",
+                  "username": "helpdesk"
+                },
+                "actor_ip": "10.0.0.251",
+                "at": "2026-10-11T08:02:40Z",
+                "details": {
+                  "permission": "discovery:run",
+                  "reason": "missing_permission",
+                  "role": "viewer"
+                },
+                "id": 4215,
+                "outcome": "denied",
+                "target_id": "POST /api/v1/discovery/runs",
+                "target_type": "route"
+              },
+              {
+                "action": "auth.login",
+                "actor": {
+                  "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                  "username": "operator1"
+                },
+                "actor_ip": "10.0.0.250",
+                "at": "2026-10-11T07:58:12Z",
+                "details": {
+                  "mfa": "totp"
+                },
+                "id": 4211,
+                "outcome": "success"
+              }
+            ],
+            "limit": 50,
+            "offset": 0,
+            "total": 2
+          }
+        ]
       },
       "ChangeOrigin": {
         "type": "string",
@@ -8157,6 +11896,214 @@
         ],
         "title": "CredentialKind"
       },
+      "CredentialProfile": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CredentialKind"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "enable_secret_set": {
+            "type": "boolean",
+            "title": "Enable Secret Set",
+            "description": "Whether an SSH enable secret is stored."
+          },
+          "auth_protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnmpAuthProtocol"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priv_protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnmpPrivProtocol"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "devices": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Devices",
+            "description": "Devices that use the profile."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "username",
+          "enable_secret_set",
+          "auth_protocol",
+          "priv_protocol",
+          "devices",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CredentialProfile",
+        "description": "A profile for administration: everything but its secrets.",
+        "examples": [
+          {
+            "created_at": "2026-09-01T08:00:00Z",
+            "devices": 42,
+            "enable_secret_set": false,
+            "id": "5e0c7a1d-0000-4000-8000-000000008001",
+            "kind": "ssh",
+            "name": "campus-ro",
+            "updated_at": "2026-10-02T13:20:00Z",
+            "username": "netops-ro"
+          }
+        ]
+      },
+      "CredentialProfileCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CredentialKind"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password",
+            "description": "Write-only: stored encrypted, never returned."
+          },
+          "enable_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enable Secret",
+            "description": "Write-only: stored encrypted, never returned."
+          },
+          "auth_protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnmpAuthProtocol"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auth_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 8,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Key",
+            "description": "Write-only: stored encrypted, never returned."
+          },
+          "priv_protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnmpPrivProtocol"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priv_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 8,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priv Key",
+            "description": "Write-only: stored encrypted, never returned."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "username"
+        ],
+        "title": "CredentialProfileCreate",
+        "description": "SSH: ``password`` (and optionally ``enable_secret``). SNMPv3 (authPriv only):\n``auth_protocol``, ``auth_key``, ``priv_protocol``, ``priv_key``.",
+        "examples": [
+          {
+            "kind": "ssh",
+            "name": "campus-ro",
+            "password": "example",
+            "username": "netops-ro"
+          }
+        ]
+      },
       "CredentialProfilePage": {
         "properties": {
           "items": {
@@ -8242,8 +12189,141 @@
           }
         ]
       },
+      "CredentialProfileUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password",
+            "description": "Write-only: stored encrypted, never returned."
+          },
+          "enable_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enable Secret",
+            "description": "Write-only: stored encrypted, never returned."
+          },
+          "clear_enable_secret": {
+            "type": "boolean",
+            "title": "Clear Enable Secret",
+            "default": false
+          },
+          "auth_protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnmpAuthProtocol"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auth_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 8,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Key",
+            "description": "Write-only: stored encrypted, never returned."
+          },
+          "priv_protocol": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnmpPrivProtocol"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priv_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 8,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priv Key",
+            "description": "Write-only: stored encrypted, never returned."
+          }
+        },
+        "type": "object",
+        "title": "CredentialProfileUpdate",
+        "description": "Fields left out stay as they are; a secret is replaced only when sent.",
+        "examples": [
+          {
+            "password": "example-new"
+          }
+        ]
+      },
       "CurrentUser": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
           "username": {
             "type": "string",
             "title": "Username"
@@ -8252,21 +12332,113 @@
             "type": "string",
             "title": "Display Name"
           },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "role": {
             "$ref": "#/components/schemas/UserRole"
+          },
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/Permission"
+            },
+            "type": "array",
+            "title": "Permissions"
+          },
+          "mfa_enabled": {
+            "type": "boolean",
+            "title": "Mfa Enabled"
+          },
+          "mfa_required": {
+            "type": "boolean",
+            "title": "Mfa Required",
+            "description": "Whether the MFA policy applies to this role."
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            },
+            "type": "array",
+            "title": "Requirements"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "password_changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Password Changed At"
           }
         },
         "type": "object",
         "required": [
+          "id",
           "username",
           "display_name",
-          "role"
+          "email",
+          "role",
+          "permissions",
+          "mfa_enabled",
+          "mfa_required",
+          "requirements",
+          "session_id",
+          "last_login_at",
+          "password_changed_at"
         ],
         "title": "CurrentUser",
         "examples": [
           {
             "display_name": "NOC Operator 1",
+            "email": "operator1@example.net",
+            "id": "5e0c7a1d-0000-4000-8000-000000007002",
+            "last_login_at": "2026-10-11T07:58:12Z",
+            "mfa_enabled": true,
+            "mfa_required": true,
+            "password_changed_at": "2026-09-30T09:12:00Z",
+            "permissions": [
+              "alarms:ack",
+              "alarms:read",
+              "configs:backup",
+              "configs:read",
+              "credentials:read",
+              "devices:read",
+              "devices:refresh",
+              "diagnosis:read",
+              "discovery:read",
+              "discovery:run",
+              "events:read",
+              "jobs:read",
+              "locations:read",
+              "metrics:read",
+              "profile:self",
+              "topology:layout:write",
+              "topology:read"
+            ],
+            "requirements": [],
             "role": "operator",
+            "session_id": "5e0c7a1d-0000-4000-8000-000000007101",
             "username": "operator1"
           }
         ]
@@ -12620,11 +16792,13 @@
         "properties": {
           "username": {
             "type": "string",
+            "maxLength": 200,
             "minLength": 1,
             "title": "Username"
           },
           "password": {
             "type": "string",
+            "maxLength": 1024,
             "minLength": 1,
             "format": "password",
             "title": "Password",
@@ -12641,6 +16815,82 @@
           {
             "password": "example-password",
             "username": "operator1"
+          }
+        ]
+      },
+      "LoginResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "authenticated",
+              "mfa_required"
+            ],
+            "title": "Status"
+          },
+          "access_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Token"
+          },
+          "token_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "bearer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Type"
+          },
+          "expires_in": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Expires In",
+            "description": "Seconds until the token (or challenge) expires."
+          },
+          "mfa_challenge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mfa Challenge"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            },
+            "type": "array",
+            "title": "Requirements",
+            "description": "What the session must do before anything but its own account opens: change the password, enroll in MFA."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "expires_in"
+        ],
+        "title": "LoginResponse",
+        "description": "``authenticated``: the access token (the refresh token is set as an HttpOnly cookie\nscoped to /api/v1/auth). ``mfa_required``: send a code with ``mfa_challenge`` to\nPOST /auth/mfa/verify within ``expires_in`` seconds.",
+        "examples": [
+          {
+            "access_token": "<JWT>",
+            "expires_in": 900,
+            "requirements": [],
+            "status": "authenticated",
+            "token_type": "bearer"
           }
         ]
       },
@@ -12833,6 +17083,153 @@
           }
         ]
       },
+      "MfaCode": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 6,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "MfaCode",
+        "examples": [
+          {
+            "code": "492039"
+          }
+        ]
+      },
+      "MfaDisable": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "recovery_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "MfaDisable",
+        "examples": [
+          {
+            "code": "492039",
+            "password": "example-password"
+          }
+        ]
+      },
+      "MfaEnrollment": {
+        "properties": {
+          "secret": {
+            "type": "string",
+            "title": "Secret",
+            "description": "Base32 secret, for manual entry."
+          },
+          "otpauth_uri": {
+            "type": "string",
+            "title": "Otpauth Uri"
+          },
+          "qr_svg": {
+            "type": "string",
+            "title": "Qr Svg",
+            "description": "The otpauth URI as a QR code (SVG data URI)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "secret",
+          "otpauth_uri",
+          "qr_svg"
+        ],
+        "title": "MfaEnrollment",
+        "description": "A pending TOTP secret: add it to an authenticator app, then confirm with a code.",
+        "examples": [
+          {
+            "otpauth_uri": "otpauth://totp/NetOps:operator1?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=NetOps",
+            "qr_svg": "data:image/svg+xml,...",
+            "secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+          }
+        ]
+      },
+      "MfaVerifyRequest": {
+        "properties": {
+          "mfa_challenge": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Mfa Challenge"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code",
+            "description": "6-digit TOTP code."
+          },
+          "recovery_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Code",
+            "description": "One of the recovery codes, instead of code."
+          }
+        },
+        "type": "object",
+        "required": [
+          "mfa_challenge"
+        ],
+        "title": "MfaVerifyRequest",
+        "examples": [
+          {
+            "code": "492039",
+            "mfa_challenge": "<challenge>"
+          }
+        ]
+      },
       "NodeKind": {
         "type": "string",
         "enum": [
@@ -12898,6 +17295,65 @@
           "unknown"
         ],
         "title": "OsFamily"
+      },
+      "PasswordChange": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "format": "password",
+            "title": "Current Password",
+            "writeOnly": true
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "format": "password",
+            "title": "New Password",
+            "writeOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChange",
+        "examples": [
+          {
+            "current_password": "example-current",
+            "new_password": "a long new pass phrase"
+          }
+        ]
+      },
+      "PasswordReset": {
+        "properties": {
+          "temporary_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temporary Password"
+          }
+        },
+        "type": "object",
+        "title": "PasswordReset",
+        "description": "Forces a password change at the next sign-in; with ``temporary_password`` it also\nreplaces the password (for a user who forgot theirs). Ends the user's sessions.",
+        "examples": [
+          {
+            "temporary_password": "a temporary pass phrase"
+          }
+        ]
       },
       "PathHop": {
         "properties": {
@@ -13245,6 +17701,33 @@
         ],
         "title": "PathWarningCode"
       },
+      "Permission": {
+        "type": "string",
+        "enum": [
+          "devices:read",
+          "devices:refresh",
+          "topology:read",
+          "topology:layout:write",
+          "discovery:read",
+          "discovery:run",
+          "configs:read",
+          "configs:backup",
+          "events:read",
+          "metrics:read",
+          "alarms:read",
+          "alarms:ack",
+          "diagnosis:read",
+          "locations:read",
+          "locations:manage",
+          "jobs:read",
+          "credentials:read",
+          "credentials:manage",
+          "users:manage",
+          "audit:read",
+          "profile:self"
+        ],
+        "title": "Permission"
+      },
       "Problem": {
         "properties": {
           "type": {
@@ -13331,6 +17814,40 @@
         ],
         "title": "Reachability"
       },
+      "RecoveryCodes": {
+        "properties": {
+          "recovery_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recovery Codes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recovery_codes"
+        ],
+        "title": "RecoveryCodes",
+        "description": "Shown once: the platform stores only their hashes.",
+        "examples": [
+          {
+            "recovery_codes": [
+              "k7mfp-2wq9x",
+              "r3hjt-8vbna"
+            ]
+          }
+        ]
+      },
+      "Requirement": {
+        "type": "string",
+        "enum": [
+          "password_change",
+          "mfa_enrollment"
+        ],
+        "title": "Requirement",
+        "description": "What a session must do before it may use anything but its own account."
+      },
       "RouteProtocol": {
         "type": "string",
         "enum": [
@@ -13415,6 +17932,133 @@
             "metric": 0,
             "prefix": "10.0.40.0/24",
             "protocol": "connected"
+          }
+        ]
+      },
+      "SessionInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Used At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "ipvanyaddress"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          },
+          "current": {
+            "type": "boolean",
+            "title": "Current"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "started_at",
+          "last_used_at",
+          "expires_at",
+          "ip",
+          "user_agent",
+          "current"
+        ],
+        "title": "SessionInfo",
+        "description": "A sign-in that can still be refreshed (a refresh token family).",
+        "examples": [
+          {
+            "current": true,
+            "expires_at": "2026-10-11T21:43:05Z",
+            "id": "5e0c7a1d-0000-4000-8000-000000007101",
+            "ip": "10.0.0.250",
+            "last_used_at": "2026-10-11T09:43:05Z",
+            "started_at": "2026-10-11T07:58:12Z",
+            "user_agent": "Mozilla/5.0 (X11; Linux x86_64) Firefox/131.0"
+          }
+        ]
+      },
+      "SessionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionInfo"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "description": "Number of items matching the filters, all pages."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "SessionPage",
+        "examples": [
+          {
+            "items": [
+              {
+                "current": true,
+                "expires_at": "2026-10-11T21:43:05Z",
+                "id": "5e0c7a1d-0000-4000-8000-000000007101",
+                "ip": "10.0.0.250",
+                "last_used_at": "2026-10-11T09:43:05Z",
+                "started_at": "2026-10-11T07:58:12Z",
+                "user_agent": "Mozilla/5.0 (X11; Linux x86_64) Firefox/131.0"
+              }
+            ],
+            "limit": 50,
+            "offset": 0,
+            "total": 1
           }
         ]
       },
@@ -13514,6 +18158,28 @@
           }
         ]
       },
+      "SnmpAuthProtocol": {
+        "type": "string",
+        "enum": [
+          "sha",
+          "sha224",
+          "sha256",
+          "sha384",
+          "sha512"
+        ],
+        "title": "SnmpAuthProtocol",
+        "description": "SNMPv3 authentication; MD5 is deliberately not offered."
+      },
+      "SnmpPrivProtocol": {
+        "type": "string",
+        "enum": [
+          "aes128",
+          "aes192",
+          "aes256"
+        ],
+        "title": "SnmpPrivProtocol",
+        "description": "SNMPv3 privacy (encryption); DES and 3DES are deliberately not offered."
+      },
       "SwitchportMode": {
         "type": "string",
         "enum": [
@@ -13524,39 +18190,6 @@
         ],
         "title": "SwitchportMode",
         "description": "Operational mode; \"dynamic auto/desirable\" ports are stored as what they negotiated."
-      },
-      "Token": {
-        "properties": {
-          "access_token": {
-            "type": "string",
-            "title": "Access Token"
-          },
-          "token_type": {
-            "type": "string",
-            "const": "bearer",
-            "title": "Token Type"
-          },
-          "expires_in": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Expires In",
-            "description": "Seconds until the token expires."
-          }
-        },
-        "type": "object",
-        "required": [
-          "access_token",
-          "token_type",
-          "expires_in"
-        ],
-        "title": "Token",
-        "examples": [
-          {
-            "access_token": "<JWT>",
-            "expires_in": 3600,
-            "token_type": "bearer"
-          }
-        ]
       },
       "Topology": {
         "properties": {
@@ -14442,6 +19075,250 @@
           }
         ]
       },
+      "User": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "mfa_enabled": {
+            "type": "boolean",
+            "title": "Mfa Enabled"
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "title": "Must Change Password"
+          },
+          "locked_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Until"
+          },
+          "failed_login_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Failed Login Count"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "password_changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Password Changed At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "display_name",
+          "email",
+          "role",
+          "is_active",
+          "mfa_enabled",
+          "must_change_password",
+          "locked_until",
+          "failed_login_count",
+          "last_login_at",
+          "password_changed_at",
+          "created_at"
+        ],
+        "title": "User",
+        "examples": [
+          {
+            "created_at": "2026-09-01T08:00:00Z",
+            "display_name": "NOC Operator 1",
+            "email": "operator1@example.net",
+            "failed_login_count": 0,
+            "id": "5e0c7a1d-0000-4000-8000-000000007002",
+            "is_active": true,
+            "last_login_at": "2026-10-11T07:58:12Z",
+            "mfa_enabled": true,
+            "must_change_password": false,
+            "password_changed_at": "2026-09-30T09:12:00Z",
+            "role": "operator",
+            "username": "operator1"
+          }
+        ]
+      },
+      "UserCreate": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._@-]+$",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 254,
+                "pattern": "^[^@\\s]+@[^@\\s]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "display_name",
+          "role",
+          "password"
+        ],
+        "title": "UserCreate",
+        "description": "The password is temporary: the user must change it at the first sign-in.",
+        "examples": [
+          {
+            "display_name": "NOC Operator 2",
+            "email": "operator2@example.net",
+            "password": "a temporary pass phrase",
+            "role": "operator",
+            "username": "operator2"
+          }
+        ]
+      },
+      "UserPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "description": "Number of items matching the filters, all pages."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "UserPage",
+        "examples": [
+          {
+            "items": [
+              {
+                "created_at": "2026-09-01T08:00:00Z",
+                "display_name": "NOC Operator 1",
+                "email": "operator1@example.net",
+                "failed_login_count": 0,
+                "id": "5e0c7a1d-0000-4000-8000-000000007002",
+                "is_active": true,
+                "last_login_at": "2026-10-11T07:58:12Z",
+                "mfa_enabled": true,
+                "must_change_password": false,
+                "password_changed_at": "2026-09-30T09:12:00Z",
+                "role": "operator",
+                "username": "operator1"
+              },
+              {
+                "created_at": "2026-09-01T08:00:00Z",
+                "display_name": "Helpdesk",
+                "failed_login_count": 0,
+                "id": "5e0c7a1d-0000-4000-8000-000000007003",
+                "is_active": true,
+                "mfa_enabled": false,
+                "must_change_password": false,
+                "password_changed_at": "2026-09-30T09:12:00Z",
+                "role": "viewer",
+                "username": "helpdesk"
+              }
+            ],
+            "limit": 50,
+            "offset": 0,
+            "total": 2
+          }
+        ]
+      },
       "UserRole": {
         "type": "string",
         "enum": [
@@ -14450,7 +19327,66 @@
           "viewer"
         ],
         "title": "UserRole",
-        "description": "Proposal 7.7: Admin / Operator / Read-only."
+        "description": "Proposal 7.7: Admin / Operator / Read-only (permissions: netops.auth.rbac)."
+      },
+      "UserUpdate": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 254,
+                "pattern": "^([^@\\s]+@[^@\\s]+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate",
+        "description": "Fields left out stay as they are. Deactivating ends the user's sessions.",
+        "examples": [
+          {
+            "role": "viewer"
+          }
+        ]
       },
       "ValidationIssue": {
         "properties": {
@@ -14555,7 +19491,7 @@
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",
-        "description": "JWT from POST /api/v1/auth/login, sent as `Authorization: Bearer <token>`.",
+        "description": "Access token from POST /api/v1/auth/login (or /auth/mfa/verify, /auth/refresh), sent as `Authorization: Bearer <token>`; valid for 15 minutes.",
         "scheme": "bearer",
         "bearerFormat": "JWT"
       }
@@ -14568,7 +19504,19 @@
     },
     {
       "name": "auth",
-      "description": "Login and the current user (M7; contract only)."
+      "description": "Sign-in (password, TOTP), sessions, the signed-in user's account (M7)."
+    },
+    {
+      "name": "users",
+      "description": "User administration (M7, admin)."
+    },
+    {
+      "name": "credentials",
+      "description": "Device credential profiles (M7)."
+    },
+    {
+      "name": "audit",
+      "description": "The append-only audit log (M7, admin)."
     },
     {
       "name": "locations",

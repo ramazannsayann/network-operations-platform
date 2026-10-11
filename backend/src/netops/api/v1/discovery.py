@@ -22,10 +22,12 @@ from netops.api.schemas.discovery import (
     SkippedNeighbor,
     SkipReason,
 )
-from netops.api.security import AUTHENTICATED
+from netops.api.security import CurrentPrincipal, guard
 from netops.api.v1.common import ACCEPTED, DEFAULT_LIMIT, Enqueue, Limit, Offset, Session
+from netops.auth import audit
+from netops.auth.rbac import Permission
 from netops.db import models as m
-from netops.db.enums import DiscoveryItemStatus, JobStatus
+from netops.db.enums import AuditOutcome, DiscoveryItemStatus, JobStatus
 from netops.discovery.service import (
     CredentialProfileError,
     DiscoveryInProgressError,
@@ -35,8 +37,7 @@ from netops.discovery.service import (
 router = APIRouter(
     prefix="/discovery/runs",
     tags=["discovery"],
-    dependencies=AUTHENTICATED,
-    responses=problems(401, 422, 501),
+    responses=problems(401, 403, 422, 501),
 )
 
 DiscoveryRunSort = Literal["requested_at", "-requested_at"]
@@ -45,9 +46,18 @@ _SKIP_REASONS = {reason.value for reason in SkipReason}
 _ERRORS = (DiscoveryItemStatus.AUTH_FAILED, DiscoveryItemStatus.UNREACHABLE)
 
 
-@router.post("", status_code=HTTPStatus.ACCEPTED, responses=ACCEPTED | problems(409))
+@router.post(
+    "",
+    status_code=HTTPStatus.ACCEPTED,
+    responses=ACCEPTED | problems(409),
+    **guard(Permission.DISCOVERY_RUN),
+)
 async def start_discovery(
-    session: Session, enqueue: Enqueue, response: Response, body: DiscoveryRunCreate
+    session: Session,
+    enqueue: Enqueue,
+    response: Response,
+    body: DiscoveryRunCreate,
+    principal: CurrentPrincipal,
 ) -> JobRef:
     """Start a CDP/LLDP discovery from the seeds. 409 while another run is in progress.
 
@@ -67,6 +77,21 @@ async def start_discovery(
         raise ProblemError(
             HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(exc), type_=VALIDATION_ERROR
         ) from None
+    audit.record(
+        session,
+        "discovery.start",
+        AuditOutcome.SUCCESS,
+        actor_user_id=principal.user_id,
+        actor_ip=principal.ip,
+        target_type="discovery_run",
+        target_id=run.id,
+        details={
+            "seeds": [str(seed) for seed in body.seeds],
+            "allowed_subnets": [str(net) for net in body.allowed_subnets],
+            "credential_profile_ids": [str(p) for p in body.credential_profile_ids],
+        },
+    )
+    await session.commit()
     enqueue("netops.discover", str(run.id))
     href = f"/api/v1/jobs/{job.id}"
     response.headers["Location"] = href
@@ -101,7 +126,7 @@ def _summary(run: m.DiscoveryRun) -> dict[str, object]:
     }
 
 
-@router.get("")
+@router.get("", **guard(Permission.DISCOVERY_READ))
 async def list_discovery_runs(
     session: Session,
     status: Annotated[list[JobStatus] | None, Query()] = None,
@@ -129,7 +154,7 @@ async def list_discovery_runs(
     )
 
 
-@router.get("/{run_id}", responses=problems(404))
+@router.get("/{run_id}", responses=problems(404), **guard(Permission.DISCOVERY_READ))
 async def get_discovery_run(session: Session, run_id: UUID) -> DiscoveryRun:
     """Progress, devices found, neighbours skipped (e.g. out of scope) and errors."""
     run = await session.get(m.DiscoveryRun, run_id)

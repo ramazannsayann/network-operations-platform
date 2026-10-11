@@ -33,10 +33,13 @@ from netops.api.schemas.topology import (
     TopologyLayoutUpdate,
     TopologyNode,
 )
-from netops.api.security import AUTHENTICATED
+from netops.api.security import CurrentPrincipal, guard
 from netops.api.v1.common import At, Session
+from netops.auth import audit
+from netops.auth.rbac import Permission
 from netops.db import models as m
 from netops.db.enums import (
+    AuditOutcome,
     CollectionKind,
     DeviceRole,
     DeviceType,
@@ -51,8 +54,7 @@ from netops.discovery.links import links_reported_at
 router = APIRouter(
     prefix="/topology",
     tags=["topology"],
-    dependencies=AUTHENTICATED,
-    responses=problems(401, 422, 501),
+    responses=problems(401, 403, 422, 501),
 )
 
 _L3_TYPES = (DeviceType.ROUTER, DeviceType.L3_SWITCH)
@@ -389,7 +391,7 @@ def _member_edge(
 # --- endpoints -----------------------------------------------------------------------------
 
 
-@router.get("")
+@router.get("", **guard(Permission.TOPOLOGY_READ))
 async def get_topology(
     session: Session,
     layer: TopologyLayer = TopologyLayer.L2,
@@ -420,7 +422,7 @@ def _device_ref(device: m.Device) -> DeviceRef:
     return DeviceRef(id=device.id, hostname=device.hostname, mgmt_ip=mgmt_ip)
 
 
-@router.get("/changes")
+@router.get("/changes", **guard(Permission.TOPOLOGY_READ))
 async def get_topology_changes(
     session: Session,
     since: Annotated[AwareDatetime, Query(description="Start of the comparison window.")],
@@ -543,17 +545,20 @@ async def _layout(session: AsyncSession, layer: TopologyLayer) -> TopologyLayout
     )
 
 
-@router.get("/layout")
+@router.get("/layout", **guard(Permission.TOPOLOGY_READ))
 async def get_topology_layout(
     session: Session, layer: LayerQuery = TopologyLayer.L2
 ) -> TopologyLayout:
-    """Saved node positions of a map (one layout for everyone until M7 adds users)."""
+    """Saved node positions of a map (one layout shared by everyone)."""
     return await _layout(session, layer)
 
 
-@router.put("/layout")
+@router.put("/layout", **guard(Permission.TOPOLOGY_LAYOUT_WRITE))
 async def put_topology_layout(
-    session: Session, body: TopologyLayoutUpdate, layer: LayerQuery = TopologyLayer.L2
+    session: Session,
+    body: TopologyLayoutUpdate,
+    principal: CurrentPrincipal,
+    layer: LayerQuery = TopologyLayer.L2,
 ) -> TopologyLayout:
     """Replace the saved positions of a map; an empty list returns it to the automatic
     layout. Node ids are device ids, or subnet prefixes on the L3 map."""
@@ -595,6 +600,16 @@ async def put_topology_layout(
             updated_at=now,
         )
         for p in {p.node_id: p for p in body.positions}.values()
+    )
+    audit.record(
+        session,
+        "topology.layout.save",
+        AuditOutcome.SUCCESS,
+        actor_user_id=principal.user_id,
+        actor_ip=principal.ip,
+        target_type="topology_layout",
+        target_id=layer.value,
+        details={"positions": len(body.positions)},
     )
     await session.commit()
     return await _layout(session, layer)

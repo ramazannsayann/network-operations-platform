@@ -1,5 +1,7 @@
 import { expect, type Page, test } from '@playwright/test'
 
+import { enrollAdmin, signOut } from './session.ts'
+
 /**
  * Screenshots for documentation and pull requests, from the real stack with the fake lab
  * (after a discovery). Run: E2E_FAKELAB=1 npx playwright test --project=screenshots
@@ -17,6 +19,13 @@ for (const scheme of ['light', 'dark'] as const) {
     test.use({ colorScheme: scheme })
 
     test(`pages (${scheme})`, async ({ page }) => {
+      test.setTimeout(240_000)
+      // The admin's MFA is reset and set up again (no secret is kept between runs); the
+      // enrollment page is captured before it shows a secret.
+      await enrollAdmin(page, async () => {
+        await settle(page)
+        await page.screenshot({ path: `${OUT}/setup-mfa-${scheme}.png` })
+      })
       await page.goto('/topology')
       await expect(page.getByTestId('topology-summary')).toContainText('düğüm')
       await settle(page)
@@ -81,6 +90,33 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByTestId('events-table')).toBeVisible()
       await settle(page)
       await page.screenshot({ path: `${OUT}/events-${scheme}.png`, fullPage: true })
+
+      // M7: administration and the own account.
+      await page.goto('/admin/users')
+      await expect(page.getByTestId('users-table')).toContainText('fakelab-viewer')
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/admin-users-${scheme}.png`, fullPage: true })
+
+      await page.goto('/admin/credentials')
+      await page.getByRole('row').filter({ hasText: 'fakelab' }).last().getByRole('button').click()
+      await expect(page.getByRole('dialog')).toContainText('Kayıtlı değer gösterilmez')
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/admin-credentials-${scheme}.png` })
+      await page.keyboard.press('Escape')
+
+      await page.goto('/admin/audit')
+      await expect(page.getByTestId('audit-table')).toContainText('auth.login')
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/admin-audit-${scheme}.png`, fullPage: true })
+
+      await page.goto('/profile')
+      await expect(page.getByTestId('sessions')).toBeVisible()
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/profile-${scheme}.png`, fullPage: true })
+
+      await signOut(page)
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/login-${scheme}.png` })
     })
   })
 }

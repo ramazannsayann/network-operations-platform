@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 
 import { useCredentialProfiles, useDiscoveryRuns, useStartDiscovery } from '../../api/queries'
+import { useCan } from '../../auth/context'
 import { EmptyState } from '../../components/EmptyState'
 import { ProblemAlert } from '../../components/ProblemAlert'
 import { RelativeTime } from '../../components/RelativeTime'
@@ -33,7 +34,7 @@ const SPLIT = [',', ' ', ';', '\n']
 export function DiscoveryForm() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const profiles = useCredentialProfiles()
+  const profiles = useCredentialProfiles('ssh')
   const start = useStartDiscovery()
   const [seeds, setSeeds] = useState<string[]>([])
   const [subnets, setSubnets] = useState<string[]>([])
@@ -195,12 +196,19 @@ function RunList() {
 
 export function DiscoveryPage() {
   const { t } = useTranslation()
+  const canRun = useCan('discovery:run')
   return (
     <Stack gap="md">
       <Title order={2}>{t('discovery.title')}</Title>
       <Grid>
         <Grid.Col span={{ base: 12, lg: 5 }}>
-          <DiscoveryForm />
+          {canRun ? (
+            <DiscoveryForm />
+          ) : (
+            <Alert color="gray" variant="light" title={t('discovery.readOnlyTitle')}>
+              {t('discovery.readOnly')}
+            </Alert>
+          )}
         </Grid.Col>
         <Grid.Col span={{ base: 12, lg: 7 }}>
           <RunList />

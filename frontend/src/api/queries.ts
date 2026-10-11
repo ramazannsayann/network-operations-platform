@@ -19,6 +19,8 @@ export type ConfigChangesQuery = NonNullable<
   paths['/api/v1/config-changes']['get']['parameters']['query']
 >
 export type EventsQuery = NonNullable<paths['/api/v1/events']['get']['parameters']['query']>
+export type UsersQuery = NonNullable<paths['/api/v1/users']['get']['parameters']['query']>
+export type AuditQuery = NonNullable<paths['/api/v1/audit']['get']['parameters']['query']>
 
 const ACTIVE_JOB: JobStatus[] = ['queued', 'running']
 export const POLL_MS = 2000
@@ -43,6 +45,10 @@ export const keys = {
     ['config-diff', from, to, context] as const,
   configChanges: (query: ConfigChangesQuery) => ['config-changes', query] as const,
   events: (query: EventsQuery) => ['events', query] as const,
+  sessions: ['auth', 'sessions'] as const,
+  users: (query: UsersQuery) => ['users', query] as const,
+  credentialProfile: (id: string) => ['credential-profile', id] as const,
+  audit: (query: AuditQuery) => ['audit', query] as const,
 }
 
 // Lists that change as devices are backed up or send syslog.
@@ -148,13 +154,14 @@ export function useStartDiscovery() {
   })
 }
 
-export function useCredentialProfiles() {
+/** Profiles by name; discovery offers only the SSH ones, the admin page lists all. */
+export function useCredentialProfiles(kind?: Schemas['CredentialKind']) {
   return useQuery({
-    queryKey: keys.credentialProfiles,
+    queryKey: [...keys.credentialProfiles, kind ?? 'all'],
     queryFn: ({ signal }) =>
       unwrap(
         api.GET('/api/v1/credential-profiles', {
-          params: { query: { kind: ['ssh'], limit: 500 } },
+          params: { query: { kind: kind ? [kind] : undefined, limit: 500 } },
           signal,
         }),
       ),
@@ -284,5 +291,165 @@ export function useEvents(query: EventsQuery, live = true) {
     queryFn: ({ signal }) => unwrap(api.GET('/api/v1/events', { params: { query }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live ? 10_000 : false,
+  })
+}
+
+// --- The signed-in user's account (M7) -------------------------------------------------------
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (body: Schemas['PasswordChange']) =>
+      unwrap(api.POST('/api/v1/auth/password', { body })),
+  })
+}
+
+export function useBeginMfa() {
+  return useMutation({ mutationFn: () => unwrap(api.POST('/api/v1/auth/mfa/enroll')) })
+}
+
+export function useConfirmMfa() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      unwrap(api.POST('/api/v1/auth/mfa/enroll/confirm', { body: { code } })),
+  })
+}
+
+export function useDisableMfa() {
+  return useMutation({
+    mutationFn: (body: Schemas['MfaDisable']) =>
+      unwrap(api.POST('/api/v1/auth/mfa/disable', { body })),
+  })
+}
+
+export function useSessions() {
+  return useQuery({
+    queryKey: keys.sessions,
+    queryFn: ({ signal }) => unwrap(api.GET('/api/v1/auth/sessions', { signal })),
+  })
+}
+
+export function useRevokeSession() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        api.DELETE('/api/v1/auth/sessions/{session_id}', { params: { path: { session_id: id } } }),
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.sessions }),
+  })
+}
+
+// --- Administration (M7, admins) ----------------------------------------------------------
+
+export function useUsers(query: UsersQuery) {
+  return useQuery({
+    queryKey: keys.users(query),
+    queryFn: ({ signal }) => unwrap(api.GET('/api/v1/users', { params: { query }, signal })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+function useUserMutation<T>(call: (variables: T) => Promise<unknown>) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: call,
+    onSuccess: () => client.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+export function useCreateUser() {
+  return useUserMutation((body: Schemas['UserCreate']) =>
+    unwrap(api.POST('/api/v1/users', { body })),
+  )
+}
+
+export function useUpdateUser() {
+  return useUserMutation(({ id, body }: { id: string; body: Schemas['UserUpdate'] }) =>
+    unwrap(api.PATCH('/api/v1/users/{user_id}', { params: { path: { user_id: id } }, body })),
+  )
+}
+
+export function useUserAction() {
+  return useUserMutation(
+    ({ id, action }: { id: string; action: 'deactivate' | 'reset-mfa' | 'unlock' }) => {
+      const params = { path: { user_id: id } }
+      if (action === 'deactivate')
+        return unwrap(api.POST('/api/v1/users/{user_id}/deactivate', { params }))
+      if (action === 'reset-mfa')
+        return unwrap(api.POST('/api/v1/users/{user_id}/reset-mfa', { params }))
+      return unwrap(api.POST('/api/v1/users/{user_id}/unlock', { params }))
+    },
+  )
+}
+
+export function useResetPassword() {
+  return useUserMutation(({ id, body }: { id: string; body: Schemas['PasswordReset'] }) =>
+    unwrap(
+      api.POST('/api/v1/users/{user_id}/reset-password', {
+        params: { path: { user_id: id } },
+        body,
+      }),
+    ),
+  )
+}
+
+export function useCredentialProfile(id: string | null) {
+  return useQuery({
+    queryKey: keys.credentialProfile(id ?? ''),
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/credential-profiles/{profile_id}', {
+          params: { path: { profile_id: id ?? '' } },
+          signal,
+        }),
+      ),
+    enabled: id !== null,
+  })
+}
+
+function useProfileMutation<T>(call: (variables: T) => Promise<unknown>) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: call,
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: keys.credentialProfiles })
+      await client.invalidateQueries({ queryKey: ['credential-profile'] })
+    },
+  })
+}
+
+export function useCreateCredentialProfile() {
+  return useProfileMutation((body: Schemas['CredentialProfileCreate']) =>
+    unwrap(api.POST('/api/v1/credential-profiles', { body })),
+  )
+}
+
+export function useUpdateCredentialProfile() {
+  return useProfileMutation(
+    ({ id, body }: { id: string; body: Schemas['CredentialProfileUpdate'] }) =>
+      unwrap(
+        api.PATCH('/api/v1/credential-profiles/{profile_id}', {
+          params: { path: { profile_id: id } },
+          body,
+        }),
+      ),
+  )
+}
+
+export function useDeleteCredentialProfile() {
+  return useProfileMutation((id: string) =>
+    unwrap(
+      api.DELETE('/api/v1/credential-profiles/{profile_id}', {
+        params: { path: { profile_id: id } },
+      }),
+    ),
+  )
+}
+
+export function useAudit(query: AuditQuery) {
+  return useQuery({
+    queryKey: keys.audit(query),
+    queryFn: ({ signal }) => unwrap(api.GET('/api/v1/audit', { params: { query }, signal })),
+    placeholderData: keepPreviousData,
   })
 }

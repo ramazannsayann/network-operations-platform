@@ -11,17 +11,18 @@ from sqlalchemy import ColumnElement, func, select
 from netops.api.problems import not_implemented, problems
 from netops.api.schemas.common import DeviceRef
 from netops.api.schemas.monitoring import Aggregation, Event, EventPage, MetricSeriesSet
-from netops.api.security import AUTHENTICATED
+from netops.api.security import guard
 from netops.api.v1.common import DEFAULT_LIMIT, From, Limit, Offset, Session, To
+from netops.auth.rbac import Permission
 from netops.db import models as m
 from netops.db.enums import EventKind
 
-router = APIRouter(dependencies=AUTHENTICATED, responses=problems(401, 422, 501))
+router = APIRouter(responses=problems(401, 403, 422, 501))
 
 EventSort = Literal["received_at", "-received_at"]
 
 
-@router.get("/metrics", tags=["metrics"], responses=problems(404))
+@router.get("/metrics", tags=["metrics"], responses=problems(404), **guard(Permission.METRICS_READ))
 async def get_metrics(
     device_id: UUID,
     name: Annotated[
@@ -50,7 +51,7 @@ async def get_metrics(
     raise not_implemented()
 
 
-@router.get("/events", tags=["events"])
+@router.get("/events", tags=["events"], **guard(Permission.EVENTS_READ))
 async def list_events(
     session: Session,
     device_id: UUID | None = None,
