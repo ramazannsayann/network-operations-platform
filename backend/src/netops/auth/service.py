@@ -266,13 +266,17 @@ async def login(
         challenge = tokens.issue_mfa_challenge(user.id, settings, now)
         return MfaChallenge(challenge, tokens.MFA_CHALLENGE_SECONDS)
     issued = _issue(session, user, settings, client, now)
+    details: dict[str, Any] = {"mfa": "none", "session_id": str(issued.session_id)}
+    if issued.requirements:
+        # Signed in, but limited to the own account until these are done.
+        details["requirements"] = [r.value for r in issued.requirements]
     audit.record(
         session,
         "auth.login",
         AuditOutcome.SUCCESS,
         actor_user_id=user.id,
         actor_ip=client.ip,
-        details={"mfa": "none", "session_id": str(issued.session_id)},
+        details=details,
     )
     await session.commit()
     return issued

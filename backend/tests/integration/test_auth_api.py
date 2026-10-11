@@ -213,6 +213,8 @@ def test_forced_enrollment_then_login_with_totp_and_recovery_codes(
     user_id = user("op.mfa")
     first = login(anonymous, "op.mfa", PASSWORD).json()
     assert first["requirements"] == ["mfa_enrollment"]
+    (signed_in,) = audit_entries("auth.login", actor_user_id=user_id, outcome="success")
+    assert signed_in.details["requirements"] == ["mfa_enrollment"]
     anonymous.headers["Authorization"] = f"Bearer {first['access_token']}"
     blocked = anonymous.get("/api/v1/devices")
     assert blocked.status_code == 403
