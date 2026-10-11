@@ -33,7 +33,7 @@ const SPLIT = [',', ' ', ';', '\n']
 export function DiscoveryForm() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const profiles = useCredentialProfiles()
+  const profiles = useCredentialProfiles('ssh')
   const start = useStartDiscovery()
   const [seeds, setSeeds] = useState<string[]>([])
   const [subnets, setSubnets] = useState<string[]>([])

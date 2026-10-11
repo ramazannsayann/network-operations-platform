@@ -20,6 +20,8 @@ import {
   IconDeviceDesktop,
   IconFileSettings,
   IconHistory,
+  IconKey,
+  IconListCheck,
   IconLogout,
   IconMap2,
   IconMessages,
@@ -29,6 +31,7 @@ import {
   IconSun,
   IconTopologyStar3,
   IconUser,
+  IconUsers,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, NavLink as RouterNavLink, Outlet } from 'react-router'
@@ -49,6 +52,18 @@ const LINKS = [
     permission: 'configs:read',
   },
   { to: '/events', label: 'nav.events', icon: IconMessages, permission: 'events:read' },
+] as const
+
+// Administration: only roles that have the permission see these entries.
+const ADMIN_LINKS = [
+  { to: '/admin/users', label: 'nav.users', icon: IconUsers, permission: 'users:manage' },
+  {
+    to: '/admin/credentials',
+    label: 'nav.credentials',
+    icon: IconKey,
+    permission: 'credentials:manage',
+  },
+  { to: '/admin/audit', label: 'nav.audit', icon: IconListCheck, permission: 'audit:read' },
 ] as const
 
 const LATER = [{ label: 'nav.alarms', icon: IconBell }] as const
@@ -132,6 +147,7 @@ export function Layout() {
   const { t, i18n } = useTranslation()
   const [opened, { toggle, close }] = useDisclosure()
   const { permissions } = useMe()
+  const admin = ADMIN_LINKS.filter((link) => permissions.includes(link.permission))
   return (
     <AppShell
       header={{ height: 60 }}
@@ -202,6 +218,23 @@ export function Layout() {
             disabled
           />
         ))}
+        {admin.length > 0 && (
+          <>
+            <Text size="xs" c="dimmed" fw={600} mt="md" mb={4} px="sm">
+              {t('nav.admin')}
+            </Text>
+            {admin.map(({ to, label, icon: IconComponent }) => (
+              <NavLink
+                key={to}
+                component={RouterNavLink}
+                to={to}
+                label={t(label)}
+                leftSection={<IconComponent size={18} aria-hidden />}
+                onClick={close}
+              />
+            ))}
+          </>
+        )}
       </AppShell.Navbar>
 
       <AppShell.Main>

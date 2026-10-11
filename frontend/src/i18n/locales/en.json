@@ -14,6 +14,10 @@
     "toggle": "Toggle menu",
     "configChanges": "Config changes",
     "events": "Events",
+    "users": "Users",
+    "credentials": "Credential profiles",
+    "audit": "Audit log",
+    "admin": "Administration",
     "profile": "My profile"
   },
   "header": {
@@ -131,6 +135,11 @@
       "admin": "Admin",
       "operator": "Operator",
       "viewer": "Viewer"
+    },
+    "auditOutcome": {
+      "success": "Success",
+      "denied": "Denied",
+      "failed": "Failed"
     }
   },
   "devices": {
@@ -595,6 +604,76 @@
       "passwordBody": "Your account was opened with a temporary password, or your password was reset. Choose a new one to go on.",
       "mfaTitle": "Set up two-factor authentication",
       "mfaBody": "Two-factor authentication is required for your role. Set it up before using the platform."
+    }
+  },
+  "admin": {
+    "users": {
+      "title": "Users",
+      "new": "New user",
+      "search": "Search users",
+      "username": "Username",
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "roleOf": "Role of {{username}}",
+      "state": "State",
+      "lastLogin": "Last sign-in",
+      "active": "Active",
+      "inactive": "Deactivated",
+      "locked": "Locked",
+      "mustChange": "Must change password",
+      "actionsFor": "Actions for {{username}}",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "resetMfa": "Reset two-factor authentication",
+      "resetPassword": "Reset password",
+      "resetPasswordBody": "{{username}} will have to change the password at the next sign-in; their sessions end.",
+      "resetOptional": "Optional: set a temporary password if the user forgot theirs.",
+      "unlock": "Unlock",
+      "temporaryPassword": "Temporary password",
+      "temporaryHelp": "The user must change it at the first sign-in; at least 12 characters.",
+      "usernameRule": "3-64 characters: lower-case letters, digits and . _ @ -",
+      "create": "Create"
+    },
+    "credentials": {
+      "title": "Credential profiles",
+      "subtitle": "The accounts used to reach devices. Secret fields are write-only: once stored they are never shown.",
+      "new": "New profile",
+      "edit": "Edit",
+      "name": "Profile name",
+      "kind": "Kind",
+      "username": "Username",
+      "password": "Password",
+      "enableSecret": "Enable secret",
+      "clearEnable": "Remove the stored enable secret",
+      "authProtocol": "Authentication protocol",
+      "privProtocol": "Privacy protocol",
+      "authKey": "Authentication key",
+      "privKey": "Privacy key",
+      "writeOnly": "Stored encrypted, never shown again.",
+      "stored": "The stored value is not shown; leave empty to keep it.",
+      "keep": "Type to replace",
+      "optional": "Optional.",
+      "usedBy_one": "{{count}} device uses this profile.",
+      "usedBy_other": "{{count}} devices use this profile.",
+      "delete": "Delete",
+      "save": "Save",
+      "create": "Create"
+    },
+    "audit": {
+      "title": "Audit log",
+      "subtitle": "Sign-ins, denied requests and every administrative action; entries cannot be changed or deleted.",
+      "count_one": "{{count}} entry",
+      "count_other": "{{count}} entries",
+      "actor": "User",
+      "actorPlaceholder": "username",
+      "action": "Action",
+      "outcome": "Outcome",
+      "when": "When",
+      "address": "Address",
+      "target": "Target",
+      "details": "Details",
+      "noActor": "anonymous / server (CLI)"
     }
   }
 }

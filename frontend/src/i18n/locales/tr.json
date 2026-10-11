@@ -14,6 +14,10 @@
     "toggle": "Menüyü aç/kapat",
     "configChanges": "Config değişiklikleri",
     "events": "Olaylar",
+    "users": "Kullanıcılar",
+    "credentials": "Kimlik profilleri",
+    "audit": "Denetim kaydı",
+    "admin": "Yönetim",
     "profile": "Profilim"
   },
   "header": {
@@ -131,6 +135,11 @@
       "admin": "Yönetici",
       "operator": "Operatör",
       "viewer": "İzleyici"
+    },
+    "auditOutcome": {
+      "success": "Başarılı",
+      "denied": "Reddedildi",
+      "failed": "Başarısız"
     }
   },
   "devices": {
@@ -595,6 +604,76 @@
       "passwordBody": "Hesabınız geçici bir parolayla açıldı ya da parolanız sıfırlandı. Devam etmek için yeni bir parola belirleyin.",
       "mfaTitle": "İki adımlı doğrulamayı kurun",
       "mfaBody": "Rolünüz için iki adımlı doğrulama zorunlu. Platformu kullanmadan önce kurmanız gerekiyor."
+    }
+  },
+  "admin": {
+    "users": {
+      "title": "Kullanıcılar",
+      "new": "Yeni kullanıcı",
+      "search": "Kullanıcı ara",
+      "username": "Kullanıcı adı",
+      "name": "Ad",
+      "email": "E-posta",
+      "role": "Rol",
+      "roleOf": "{{username}} kullanıcısının rolü",
+      "state": "Durum",
+      "lastLogin": "Son oturum",
+      "active": "Etkin",
+      "inactive": "Devre dışı",
+      "locked": "Kilitli",
+      "mustChange": "Parola değişmeli",
+      "actionsFor": "{{username}} için işlemler",
+      "deactivate": "Devre dışı bırak",
+      "activate": "Etkinleştir",
+      "resetMfa": "İki adımlı doğrulamayı sıfırla",
+      "resetPassword": "Parolayı sıfırla",
+      "resetPasswordBody": "{{username}} bir sonraki oturumda parolasını değiştirmek zorunda kalacak; açık oturumları kapanır.",
+      "resetOptional": "İsteğe bağlı: kullanıcı parolasını unuttuysa geçici bir parola belirleyin.",
+      "unlock": "Kilidi aç",
+      "temporaryPassword": "Geçici parola",
+      "temporaryHelp": "Kullanıcı ilk oturumda değiştirmek zorunda; en az 12 karakter.",
+      "usernameRule": "3-64 karakter: küçük harf, rakam ve . _ @ -",
+      "create": "Oluştur"
+    },
+    "credentials": {
+      "title": "Kimlik profilleri",
+      "subtitle": "Cihazlara bağlanmak için kullanılan hesaplar. Gizli alanlar yalnızca yazılabilir: kaydedildikten sonra hiçbir zaman gösterilmez.",
+      "new": "Yeni profil",
+      "edit": "Düzenle",
+      "name": "Profil adı",
+      "kind": "Tür",
+      "username": "Kullanıcı adı",
+      "password": "Parola",
+      "enableSecret": "Enable secret",
+      "clearEnable": "Kayıtlı enable secret'ı kaldır",
+      "authProtocol": "Kimlik doğrulama protokolü",
+      "privProtocol": "Şifreleme protokolü",
+      "authKey": "Kimlik doğrulama anahtarı",
+      "privKey": "Şifreleme anahtarı",
+      "writeOnly": "Şifreli saklanır, bir daha gösterilmez.",
+      "stored": "Kayıtlı değer gösterilmez; boş bırakırsanız değişmez.",
+      "keep": "Değiştirmek için yazın",
+      "optional": "İsteğe bağlı.",
+      "usedBy_one": "{{count}} cihaz bu profili kullanıyor.",
+      "usedBy_other": "{{count}} cihaz bu profili kullanıyor.",
+      "delete": "Sil",
+      "save": "Kaydet",
+      "create": "Oluştur"
+    },
+    "audit": {
+      "title": "Denetim kaydı",
+      "subtitle": "Oturumlar, yetki reddleri ve tüm yönetim işlemleri; kayıtlar değiştirilemez ve silinemez.",
+      "count_one": "{{count}} kayıt",
+      "count_other": "{{count}} kayıt",
+      "actor": "Kullanıcı",
+      "actorPlaceholder": "kullanıcı adı",
+      "action": "İşlem",
+      "outcome": "Sonuç",
+      "when": "Zaman",
+      "address": "Adres",
+      "target": "Hedef",
+      "details": "Ayrıntılar",
+      "noActor": "anonim / sunucu (CLI)"
     }
   }
 }
