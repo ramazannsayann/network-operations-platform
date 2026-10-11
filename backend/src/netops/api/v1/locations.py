@@ -4,11 +4,13 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Response, status
+from sqlalchemy import func, select
 
 from netops.api.problems import not_implemented, problems
 from netops.api.schemas.locations import Location, LocationCreate, LocationPage, LocationUpdate
 from netops.api.security import AUTHENTICATED
-from netops.api.v1.common import DEFAULT_LIMIT, Limit, Offset, SearchText
+from netops.api.v1.common import DEFAULT_LIMIT, Limit, Offset, SearchText, Session
+from netops.db import models as m
 
 router = APIRouter(
     prefix="/locations",
@@ -22,6 +24,7 @@ LocationSort = Literal["name", "-name", "path", "-path"]
 
 @router.get("")
 async def list_locations(
+    session: Session,
     parent_id: UUID | None = None,
     q: SearchText = None,
     sort: LocationSort = "path",
@@ -29,7 +32,46 @@ async def list_locations(
     offset: Offset = 0,
 ) -> LocationPage:
     """Locations, optionally only the children of ``parent_id``; ``q`` searches names."""
-    raise not_implemented()
+    locations = {loc.id: loc for loc in await session.scalars(select(m.Location))}
+    counts: dict[UUID, int] = dict(
+        (
+            await session.execute(
+                select(m.Device.location_id, func.count())
+                .where(m.Device.location_id.is_not(None))
+                .group_by(m.Device.location_id)
+            )
+        ).all()  # type: ignore[arg-type]
+    )
+
+    def path(location: m.Location) -> str:
+        names, seen = [], set()
+        current: m.Location | None = location
+        while current is not None and current.id not in seen:
+            seen.add(current.id)
+            names.append(current.name)
+            current = locations.get(current.parent_id) if current.parent_id else None
+        return " / ".join(reversed(names))
+
+    items = [
+        Location(
+            id=loc.id,
+            name=loc.name,
+            building=loc.building,
+            floor=loc.floor,
+            description=loc.description,
+            parent_id=loc.parent_id,
+            path=path(loc),
+            device_count=counts.get(loc.id, 0),
+        )
+        for loc in locations.values()
+        if (parent_id is None or loc.parent_id == parent_id)
+        and (q is None or q.lower() in loc.name.lower())
+    ]
+    key = sort.lstrip("-")
+    items.sort(key=lambda item: getattr(item, key).lower(), reverse=sort.startswith("-"))
+    return LocationPage(
+        items=items[offset : offset + limit], total=len(items), limit=limit, offset=offset
+    )
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, responses=problems(409))

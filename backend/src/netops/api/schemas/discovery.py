@@ -8,7 +8,7 @@ from pydantic import AwareDatetime, Field, IPvAnyAddress, IPvAnyNetwork
 
 from netops.api.schemas import examples as ex
 from netops.api.schemas.common import ApiModel, DeviceRef, Page, example
-from netops.db.enums import DiscoverySource, JobStatus
+from netops.db.enums import DiscoveryItemStatus, DiscoverySource, JobStatus
 
 
 class SkipReason(StrEnum):
@@ -95,6 +95,44 @@ class DiscoveryError(ApiModel):
     occurred_at: AwareDatetime
 
 
+_ITEM: dict[str, Any] = {
+    "address": "10.0.0.23",
+    "hop": 2,
+    "status": "discovered",
+    "device": ex.DEVICE_REF_ACC_B2_03,
+    "seen_from": ex.DEVICE_REF_DIST_B,
+    "local_interface": "GigabitEthernet1/0/3",
+    "neighbor_name": "sw-b2-03.campus.example.net",
+    "platform": "cisco WS-C2960X-48FPD-L",
+    "attempts": 1,
+    "is_new": False,
+    "error": None,
+    "occurred_at": "2026-10-09T08:01:12Z",
+}
+
+
+class DiscoveryRunItem(ApiModel):
+    """What the run did with one address (or address-less neighbour)."""
+
+    model_config = example(_ITEM)
+
+    address: IPvAnyAddress | None
+    hop: int = Field(ge=0, description="BFS level: 0 for seeds.")
+    status: DiscoveryItemStatus
+    device: DeviceRef | None = Field(
+        description="The device found, the one a duplicate address belongs to, or the "
+        "placeholder recorded for a skipped or failed address."
+    )
+    seen_from: DeviceRef | None = Field(description="The device whose CDP/LLDP pointed here.")
+    local_interface: str | None = Field(description="Its interface towards this neighbour.")
+    neighbor_name: str | None
+    platform: str | None
+    attempts: int = Field(ge=0, le=2, description="Logins tried (at most two).")
+    is_new: bool
+    error: str | None
+    occurred_at: AwareDatetime
+
+
 _REQUEST: dict[str, Any] = {
     "seeds": ["10.0.0.1"],
     "allowed_subnets": ["10.0.0.0/16"],
@@ -149,6 +187,7 @@ class DiscoveryRun(DiscoveryRunSummary):
                     "occurred_at": "2026-10-09T08:01:44Z",
                 }
             ],
+            "items": [_ITEM],
         }
     )
 
@@ -156,6 +195,9 @@ class DiscoveryRun(DiscoveryRunSummary):
     found_devices: list[DiscoveredDevice]
     skipped_neighbors: list[SkippedNeighbor]
     errors: list[DiscoveryError]
+    items: list[DiscoveryRunItem] = Field(
+        description="Every address the run dealt with, in BFS order, with its outcome."
+    )
 
 
 class DiscoveryRunPage(Page[DiscoveryRunSummary]):

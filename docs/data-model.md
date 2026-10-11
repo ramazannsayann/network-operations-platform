@@ -126,6 +126,9 @@ erDiagram
     }
 ```
 
+`topology_positions` (layer, node_id, device_id, x, y, updated_at) holds the map layout
+operators saved; `node_id` is a device id or, on the L3 map, a subnet prefix.
+
 Discovery (M1, [ADR-0005](adr/0005-discovery.md)) records one item per address it dealt
 with. Devices it does not log in to (out of scope, wrong credentials, access points) are
 still created as unmanaged placeholders so the map shows them; `devices.management_status`
@@ -286,6 +289,7 @@ erDiagram
 | `links` | Physical links between two interfaces, stored once (a < b), from CDP/LLDP, inference or manual entry; inactive once no longer reported. |
 | `jobs` | Long-running operations started through the API (device refresh, discovery): status, progress, error. |
 | `discovery_runs` | One discovery run: seeds, allowed subnets, credential profiles, progress counters. |
+| `topology_positions` | Saved node positions of the topology map per layer (one global layout until M7). |
 | `discovery_run_items` | What a run did with each address: discovered, duplicate, auth_failed, unreachable, out_of_scope, unsupported_platform, no_mgmt_ip. |
 | `collection_runs` | One row per collector execution: device, kind, trigger, status and timing; defines point-in-time state. |
 | `alarms` | Problems with a lifecycle (open → acknowledged → cleared), deduplicated per `dedup_key`. |

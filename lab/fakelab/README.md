@@ -55,6 +55,12 @@ make fakelab-accuracy   # precision/recall against topology.yaml
 make fakelab-down       # stop everything (make up for the normal stack)
 ```
 
+From the UI: open <http://localhost:8080/discovery>, enter seed `10.255.0.2`, subnet
+`10.255.0.0/24` and both fakelab profiles, then watch the run and the map. The same flow is
+automated: `cd frontend && npm run e2e:fakelab` (expects 11 devices and 13 logical links on
+the map: 14 cables, two of them one EtherChannel), and `npm run screenshots` refreshes
+`docs/screenshots/`.
+
 After editing `topology.yaml`, run `make fakelab-compose` to regenerate
 `deploy/docker-compose.fakelab.yml` (a test fails while it is stale).
 

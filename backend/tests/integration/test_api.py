@@ -1,73 +1,18 @@
 """The implemented v1 endpoints (devices, discovery runs, jobs) against the test database.
 
-The fake lab is discovered once per test module; the task queue is replaced by a recorder,
-so no broker is needed and nothing runs in the background.
+The fake lab is discovered by each test that needs it (fixture ``discovered``); the task
+queue is replaced by a recorder, so no broker is needed and nothing runs in the background.
 """
 
-import asyncio
 import uuid
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from netops.api.v1.common import get_task_queue
-from netops.core.settings import get_settings
-from netops.db.session import get_engine, get_sessionmaker
-from netops.discovery.engine import run_discovery
-from netops_fakes.local import LocalLab
-from netops_fakes.topology import load
-from tests.integration.support import FAKELAB_TOPOLOGY, PASSWORD, USERNAME
+from tests.integration.support import FAKELAB_REQUEST, Recorder
 
 pytestmark = pytest.mark.integration
-
-SEEDS = {"seeds": ["10.255.0.2"], "allowed_subnets": ["10.255.0.0/24"]}
-
-
-class Recorder:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, tuple[Any, ...]]] = []
-
-    def __call__(self, task: str, *args: Any) -> None:
-        self.calls.append((task, args))
-
-
-@pytest.fixture
-def api(profiles: list[uuid.UUID]) -> Iterator[tuple[TestClient, Recorder]]:
-    from netops.main import create_app
-
-    get_engine.cache_clear()
-    get_sessionmaker.cache_clear()
-    recorder = Recorder()
-    app = create_app()
-    app.dependency_overrides[get_task_queue] = lambda: recorder
-    with TestClient(app) as client:
-        yield client, recorder
-    get_engine.cache_clear()
-    get_sessionmaker.cache_clear()
-
-
-@pytest.fixture
-def discovered(
-    api: tuple[TestClient, Recorder], profiles: list[uuid.UUID]
-) -> tuple[TestClient, Recorder, dict[str, Any]]:
-    """POST a discovery run, then execute the queued task here against the fake lab."""
-    client, recorder = api
-    response = client.post(
-        "/api/v1/discovery/runs",
-        json=SEEDS | {"credential_profile_ids": [str(p) for p in profiles]},
-    )
-    assert response.status_code == 202, response.text
-    job = response.json()
-    ((task, (run_id,)),) = recorder.calls
-    assert task == "netops.discover"
-    assert job["target_href"] == f"/api/v1/discovery/runs/{run_id}"
-    assert response.headers["location"] == job["href"] == f"/api/v1/jobs/{job['id']}"
-
-    with LocalLab(load(FAKELAB_TOPOLOGY), USERNAME, PASSWORD) as lab:
-        asyncio.run(run_discovery(uuid.UUID(run_id), get_settings(), lab.resolve))
-    return client, recorder, job
 
 
 def devices_by_name(client: TestClient) -> dict[str, dict[str, Any]]:
@@ -109,6 +54,22 @@ def test_discovery_run_and_its_job(discovered: tuple[TestClient, Recorder, dict[
     assert skipped["isp-ce1"]["local_interface"] == "GigabitEthernet0/0/0"
     assert skipped["ap1"]["reason"] == "unsupported_platform"
     assert skipped["access4.lab.example.net"]["reason"] == "auth_failed"
+    statuses = [item["status"] for item in detail["items"]]
+    assert sorted(set(statuses)) == [
+        "auth_failed",
+        "discovered",
+        "duplicate",
+        "out_of_scope",
+        "unsupported_platform",
+    ]
+    assert len(statuses) == 12
+    (duplicate,) = [i for i in detail["items"] if i["status"] == "duplicate"]
+    assert duplicate["address"] == "10.255.0.70"
+    assert duplicate["device"]["hostname"] == "dist2"
+    assert duplicate["seen_from"]["hostname"] == "access3"
+    (seed,) = [i for i in detail["items"] if i["hop"] == 0]
+    assert seed["seen_from"] is None
+    assert seed["device"]["hostname"] == "core1"
     (error,) = detail["errors"]
     assert error["target"] == "10.255.0.74"
     assert "authentication failed" in error["message"]
@@ -202,12 +163,13 @@ def test_discovery_requests_are_validated(
 ) -> None:
     client, recorder = api
     unknown = client.post(
-        "/api/v1/discovery/runs", json=SEEDS | {"credential_profile_ids": [str(uuid.uuid4())]}
+        "/api/v1/discovery/runs",
+        json=FAKELAB_REQUEST | {"credential_profile_ids": [str(uuid.uuid4())]},
     )
     assert unknown.status_code == 422
     assert unknown.headers["content-type"] == "application/problem+json"
 
-    body = SEEDS | {"credential_profile_ids": [str(profiles[1])]}
+    body = FAKELAB_REQUEST | {"credential_profile_ids": [str(profiles[1])]}
     assert client.post("/api/v1/discovery/runs", json=body).status_code == 202
     conflict = client.post("/api/v1/discovery/runs", json=body)
     assert conflict.status_code == 409  # the first run is still queued
