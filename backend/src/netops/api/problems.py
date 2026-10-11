@@ -156,6 +156,7 @@ _DESCRIPTIONS = {
     409: "Conflicts with the current state of the resource",
     422: "Validation error (see the `errors` member)",
     501: "Part of the contract, not implemented yet",
+    503: "A backing store (e.g. the configuration repository) is unavailable",
 }
 
 

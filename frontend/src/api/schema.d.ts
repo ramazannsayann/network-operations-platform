@@ -549,8 +549,30 @@ export interface paths {
         /**
          * List Events
          * @description Received syslog messages and SNMP traps; ``from``/``to`` filter on ``received_at``.
+         *
+         *     Only events from known devices are stored (the receiver drops unknown sources).
          */
         get: operations["list_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config-backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Config Backups
+         * @description Backup state of every managed device: last backup, versions, recent external changes.
+         */
+        get: operations["list_config_backups"];
         put?: never;
         post?: never;
         delete?: never;
@@ -588,7 +610,8 @@ export interface paths {
         };
         /**
          * Diff Configs
-         * @description Unified diff between two configuration versions.
+         * @description Unified diff between two configuration versions, redacted (a changed secret still
+         *     shows as a changed line).
          */
         get: operations["diff_configs"];
         put?: never;
@@ -608,7 +631,7 @@ export interface paths {
         };
         /**
          * Get Config Version
-         * @description A configuration version with its normalized text (read from Git).
+         * @description A configuration version with its normalized text, secrets redacted.
          */
         get: operations["get_config_version"];
         put?: never;
@@ -919,6 +942,95 @@ export interface components {
          */
         ComponentStatus: "ok" | "error";
         /**
+         * ConfigBackupSummary
+         * @description Backup state of one managed device (the Config page).
+         * @example {
+         *       "device": {
+         *         "hostname": "dist-sw-b",
+         *         "id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *         "mgmt_ip": "10.0.0.11"
+         *       },
+         *       "last_backup_at": "2026-10-09T02:30:12Z",
+         *       "last_backup_status": "success",
+         *       "last_change_at": "2026-10-08T22:41:12Z",
+         *       "latest_version": {
+         *         "collected_at": "2026-10-08T22:41:40Z",
+         *         "content_hash": "e2a4c6b8d0f1e3a5c7b9d1f3e5a7c9b1d3f5e7a9c1b3d5f7e9a1c3b5d7f9e1a3",
+         *         "device_id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *         "git_commit": "c3e5a7b9d1f2e4c6a8b0d2f4e6c8a0b2d4f6e8a1",
+         *         "id": "5e0c7a1d-0000-4000-8000-000000006002",
+         *         "size_bytes": 18301,
+         *         "trigger": "change_event"
+         *       },
+         *       "recent_external_changes": 2,
+         *       "version_count": 37
+         *     }
+         */
+        ConfigBackupSummary: {
+            device: components["schemas"]["DeviceRef"];
+            /**
+             * Last Backup At
+             * @description When the latest successful backup (config collection run) finished.
+             */
+            last_backup_at: string | null;
+            /** @description Status of the latest backup attempt; NULL if there was none. */
+            last_backup_status: components["schemas"]["CollectionStatus"] | null;
+            /** Version Count */
+            version_count: number;
+            latest_version: components["schemas"]["ConfigVersion"] | null;
+            /** Last Change At */
+            last_change_at: string | null;
+            /**
+             * Recent External Changes
+             * @description External changes detected in the last ``days`` days.
+             */
+            recent_external_changes: number;
+        };
+        /**
+         * ConfigBackupSummaryPage
+         * @example {
+         *       "items": [
+         *         {
+         *           "device": {
+         *             "hostname": "dist-sw-b",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *             "mgmt_ip": "10.0.0.11"
+         *           },
+         *           "last_backup_at": "2026-10-09T02:30:12Z",
+         *           "last_backup_status": "success",
+         *           "last_change_at": "2026-10-08T22:41:12Z",
+         *           "latest_version": {
+         *             "collected_at": "2026-10-08T22:41:40Z",
+         *             "content_hash": "e2a4c6b8d0f1e3a5c7b9d1f3e5a7c9b1d3f5e7a9c1b3d5f7e9a1c3b5d7f9e1a3",
+         *             "device_id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *             "git_commit": "c3e5a7b9d1f2e4c6a8b0d2f4e6c8a0b2d4f6e8a1",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000006002",
+         *             "size_bytes": 18301,
+         *             "trigger": "change_event"
+         *           },
+         *           "recent_external_changes": 2,
+         *           "version_count": 37
+         *         }
+         *       ],
+         *       "limit": 50,
+         *       "offset": 0,
+         *       "total": 1
+         *     }
+         */
+        ConfigBackupSummaryPage: {
+            /** Items */
+            items: components["schemas"]["ConfigBackupSummary"][];
+            /**
+             * Total
+             * @description Number of items matching the filters, all pages.
+             */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
          * ConfigChange
          * @example {
          *       "after_version_id": "5e0c7a1d-0000-4000-8000-000000006002",
@@ -928,6 +1040,7 @@ export interface components {
          *         "switchport trunk allowed vlan remove 20"
          *       ],
          *       "detected_at": "2026-10-08T22:41:12Z",
+         *       "detected_by": "change_event",
          *       "device": {
          *         "hostname": "dist-sw-b",
          *         "id": "5e0c7a1d-0000-4000-8000-000000002003",
@@ -949,19 +1062,29 @@ export interface components {
             /**
              * Detected At
              * Format: date-time
+             * @description When the first syslog message of the change arrived, or when the backup that found it ran.
              */
             detected_at: string;
+            /** @description ``platform``: made by the platform's write account (M5); ``external``: made outside the platform (CLI session, another tool) or by an unknown user. */
             origin: components["schemas"]["ChangeOrigin"];
-            /** Username */
+            /**
+             * Username
+             * @description NULL when no syslog reported the change.
+             */
             username: string | null;
             /** Source Ip */
             source_ip: string | null;
-            /** Commands */
+            /**
+             * Commands
+             * @description Commands as entered (archive log), redacted.
+             */
             commands: string[];
             /** Before Version Id */
             before_version_id: string | null;
             /** After Version Id */
             after_version_id: string | null;
+            /** @description Trigger of the backup that recorded the new version: ``change_event`` (syslog reported the change) or ``scheduled`` / ``manual`` (a backup found a difference nobody reported). */
+            detected_by: components["schemas"]["ConfigTrigger"] | null;
         };
         /**
          * ConfigChangePage
@@ -975,6 +1098,7 @@ export interface components {
          *             "switchport trunk allowed vlan remove 20"
          *           ],
          *           "detected_at": "2026-10-08T22:41:12Z",
+         *           "detected_by": "change_event",
          *           "device": {
          *             "hostname": "dist-sw-b",
          *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
@@ -984,11 +1108,25 @@ export interface components {
          *           "origin": "external",
          *           "source_ip": "10.0.0.250",
          *           "username": "jdoe"
+         *         },
+         *         {
+         *           "after_version_id": "5e0c7a1d-0000-4000-8000-000000006001",
+         *           "before_version_id": "5e0c7a1d-0000-4000-8000-000000006000",
+         *           "commands": [],
+         *           "detected_at": "2026-10-08T02:00:00Z",
+         *           "detected_by": "scheduled",
+         *           "device": {
+         *             "hostname": "dist-sw-b",
+         *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+         *             "mgmt_ip": "10.0.0.11"
+         *           },
+         *           "id": "5e0c7a1d-0000-4000-8000-000000006102",
+         *           "origin": "external"
          *         }
          *       ],
          *       "limit": 50,
          *       "offset": 0,
-         *       "total": 1
+         *       "total": 2
          *     }
          */
         ConfigChangePage: {
@@ -1007,7 +1145,7 @@ export interface components {
         /**
          * ConfigDiff
          * @example {
-         *       "added_lines": 1,
+         *       "added_lines": 2,
          *       "from_version": {
          *         "collected_at": "2026-10-08T02:00:00Z",
          *         "content_hash": "4b7d1e9c2a6f8053e1d7c4b9a2f6e8d0c3b5a7f9e1d2c4b6a8f0e2d4c6b8a0f2",
@@ -1017,7 +1155,7 @@ export interface components {
          *         "size_bytes": 18342,
          *         "trigger": "scheduled"
          *       },
-         *       "removed_lines": 1,
+         *       "removed_lines": 2,
          *       "to_version": {
          *         "collected_at": "2026-10-08T22:41:40Z",
          *         "content_hash": "e2a4c6b8d0f1e3a5c7b9d1f3e5a7c9b1d3f5e7a9c1b3d5f7e9a1c3b5d7f9e1a3",
@@ -1027,13 +1165,16 @@ export interface components {
          *         "size_bytes": 18301,
          *         "trigger": "change_event"
          *       },
-         *       "unified_diff": "--- dist-sw-b @ 2026-10-08T02:00:00Z\n+++ dist-sw-b @ 2026-10-08T22:41:40Z\n@@ -212,7 +212,7 @@\n interface GigabitEthernet1/0/3\n  description access sw-b2-03 Gi1/0/49\n  switchport mode trunk\n- switchport trunk allowed vlan 20,30,99\n+ switchport trunk allowed vlan 30,99\n  switchport trunk native vlan 99\n !\n"
+         *       "unified_diff": "--- dist-sw-b @ 2026-10-08T02:00:00Z\n+++ dist-sw-b @ 2026-10-08T22:41:40Z\n@@ -212,7 +212,7 @@\n interface GigabitEthernet1/0/3\n  description access sw-b2-03 Gi1/0/49\n  switchport mode trunk\n- switchport trunk allowed vlan 20,30,99\n+ switchport trunk allowed vlan 30,99\n  switchport trunk native vlan 99\n !\n@@ -386,3 +386,3 @@\n !\n-username jdoe privilege 15 secret 9 <redacted>\n+username jdoe privilege 15 secret 9 <redacted>\n !\n"
          *     }
          */
         ConfigDiff: {
             from_version: components["schemas"]["ConfigVersion"];
             to_version: components["schemas"]["ConfigVersion"];
-            /** Unified Diff */
+            /**
+             * Unified Diff
+             * @description Unified diff of the redacted texts (computed on the complete texts, so a changed secret shows as a changed line); empty when they are equal.
+             */
             unified_diff: string;
             /** Added Lines */
             added_lines: number;
@@ -1088,7 +1229,7 @@ export interface components {
          * ConfigVersionContent
          * @example {
          *       "collected_at": "2026-10-08T22:41:40Z",
-         *       "content": "hostname dist-sw-b\n!\ninterface GigabitEthernet1/0/3\n description access sw-b2-03 Gi1/0/49\n switchport mode trunk\n switchport trunk allowed vlan 30,99\n switchport trunk native vlan 99\n!\n",
+         *       "content": "hostname dist-sw-b\n!\ninterface GigabitEthernet1/0/3\n description access sw-b2-03 Gi1/0/49\n switchport mode trunk\n switchport trunk allowed vlan 30,99\n switchport trunk native vlan 99\n!\nsnmp-server community <redacted> RO 20\n!\nend\n",
          *       "content_hash": "e2a4c6b8d0f1e3a5c7b9d1f3e5a7c9b1d3f5e7a9c1b3d5f7e9a1c3b5d7f9e1a3",
          *       "device_id": "5e0c7a1d-0000-4000-8000-000000002003",
          *       "git_commit": "c3e5a7b9d1f2e4c6a8b0d2f4e6c8a0b2d4f6e8a1",
@@ -1125,7 +1266,7 @@ export interface components {
             size_bytes: number;
             /**
              * Content
-             * @description Normalized configuration text, as committed to Git.
+             * @description The normalized configuration with secrets redacted (``<redacted>``).
              */
             content: string;
         };
@@ -1484,7 +1625,7 @@ export interface components {
         DeviceRefreshRequest: {
             /**
              * Kinds
-             * @description What to collect now; all supported kinds when omitted.
+             * @description What to collect now. When omitted: every kind the device's type collects by default; the configuration (``config``) only when named.
              */
             kinds?: components["schemas"]["CollectionKind"][] | null;
         };
@@ -2069,7 +2210,7 @@ export interface components {
              * Format: ipvanyaddress
              */
             source_ip: string;
-            /** @description NULL if the source is not a known device. */
+            /** @description NULL if the device has been deleted since (the receiver stores events from known devices only). */
             device: components["schemas"]["DeviceRef"] | null;
             kind: components["schemas"]["EventKind"];
             /**
@@ -2817,6 +2958,7 @@ export interface components {
          *             "switchport trunk allowed vlan remove 20"
          *           ],
          *           "detected_at": "2026-10-08T22:41:12Z",
+         *           "detected_by": "change_event",
          *           "device": {
          *             "hostname": "dist-sw-b",
          *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
@@ -8631,6 +8773,7 @@ export interface operations {
                      *             "switchport trunk allowed vlan remove 20"
                      *           ],
                      *           "detected_at": "2026-10-08T22:41:12Z",
+                     *           "detected_by": "change_event",
                      *           "device": {
                      *             "hostname": "dist-sw-b",
                      *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
@@ -9259,6 +9402,127 @@ export interface operations {
             };
         };
     };
+    list_config_backups: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive text search. */
+                q?: string | null;
+                /** @description Window for ``recent_external_changes``. */
+                days?: number;
+                sort?: "hostname" | "-hostname" | "last_change_at" | "-last_change_at";
+                /** @description Page size (1-500). */
+                limit?: number;
+                /** @description Number of items to skip. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "device": {
+                     *             "hostname": "dist-sw-b",
+                     *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+                     *             "mgmt_ip": "10.0.0.11"
+                     *           },
+                     *           "last_backup_at": "2026-10-09T02:30:12Z",
+                     *           "last_backup_status": "success",
+                     *           "last_change_at": "2026-10-08T22:41:12Z",
+                     *           "latest_version": {
+                     *             "collected_at": "2026-10-08T22:41:40Z",
+                     *             "content_hash": "e2a4c6b8d0f1e3a5c7b9d1f3e5a7c9b1d3f5e7a9c1b3d5f7e9a1c3b5d7f9e1a3",
+                     *             "device_id": "5e0c7a1d-0000-4000-8000-000000002003",
+                     *             "git_commit": "c3e5a7b9d1f2e4c6a8b0d2f4e6c8a0b2d4f6e8a1",
+                     *             "id": "5e0c7a1d-0000-4000-8000-000000006002",
+                     *             "size_bytes": 18301,
+                     *             "trigger": "change_event"
+                     *           },
+                     *           "recent_external_changes": 2,
+                     *           "version_count": 37
+                     *         }
+                     *       ],
+                     *       "limit": 50,
+                     *       "offset": 0,
+                     *       "total": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ConfigBackupSummaryPage"];
+                };
+            };
+            /** @description Missing or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "A valid bearer token is required."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation error (see the `errors` member) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "urn:netops:problem:validation-error",
+                     *       "title": "Unprocessable Entity",
+                     *       "errors": [
+                     *         {
+                     *           "loc": [
+                     *             "query",
+                     *             "limit"
+                     *           ],
+                     *           "msg": "Input should be less than or equal to 500",
+                     *           "type": "less_than_equal"
+                     *         }
+                     *       ],
+                     *       "status": 422,
+                     *       "detail": "The request is invalid; see errors."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Part of the contract, not implemented yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "urn:netops:problem:not-implemented",
+                     *       "title": "Not Implemented",
+                     *       "status": 501,
+                     *       "detail": "This endpoint is part of the API contract but is not implemented yet."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     list_device_configs: {
         parameters: {
             query?: {
@@ -9419,7 +9683,7 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "added_lines": 1,
+                     *       "added_lines": 2,
                      *       "from_version": {
                      *         "collected_at": "2026-10-08T02:00:00Z",
                      *         "content_hash": "4b7d1e9c2a6f8053e1d7c4b9a2f6e8d0c3b5a7f9e1d2c4b6a8f0e2d4c6b8a0f2",
@@ -9429,7 +9693,7 @@ export interface operations {
                      *         "size_bytes": 18342,
                      *         "trigger": "scheduled"
                      *       },
-                     *       "removed_lines": 1,
+                     *       "removed_lines": 2,
                      *       "to_version": {
                      *         "collected_at": "2026-10-08T22:41:40Z",
                      *         "content_hash": "e2a4c6b8d0f1e3a5c7b9d1f3e5a7c9b1d3f5e7a9c1b3d5f7e9a1c3b5d7f9e1a3",
@@ -9439,7 +9703,7 @@ export interface operations {
                      *         "size_bytes": 18301,
                      *         "trigger": "change_event"
                      *       },
-                     *       "unified_diff": "--- dist-sw-b @ 2026-10-08T02:00:00Z\n+++ dist-sw-b @ 2026-10-08T22:41:40Z\n@@ -212,7 +212,7 @@\n interface GigabitEthernet1/0/3\n  description access sw-b2-03 Gi1/0/49\n  switchport mode trunk\n- switchport trunk allowed vlan 20,30,99\n+ switchport trunk allowed vlan 30,99\n  switchport trunk native vlan 99\n !\n"
+                     *       "unified_diff": "--- dist-sw-b @ 2026-10-08T02:00:00Z\n+++ dist-sw-b @ 2026-10-08T22:41:40Z\n@@ -212,7 +212,7 @@\n interface GigabitEthernet1/0/3\n  description access sw-b2-03 Gi1/0/49\n  switchport mode trunk\n- switchport trunk allowed vlan 20,30,99\n+ switchport trunk allowed vlan 30,99\n  switchport trunk native vlan 99\n !\n@@ -386,3 +386,3 @@\n !\n-username jdoe privilege 15 secret 9 <redacted>\n+username jdoe privilege 15 secret 9 <redacted>\n !\n"
                      *     }
                      */
                     "application/json": components["schemas"]["ConfigDiff"];
@@ -9523,6 +9787,23 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description A backing store (e.g. the configuration repository) is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Service Unavailable",
+                     *       "status": 503,
+                     *       "detail": null
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     get_config_version: {
@@ -9545,7 +9826,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "collected_at": "2026-10-08T22:41:40Z",
-                     *       "content": "hostname dist-sw-b\n!\ninterface GigabitEthernet1/0/3\n description access sw-b2-03 Gi1/0/49\n switchport mode trunk\n switchport trunk allowed vlan 30,99\n switchport trunk native vlan 99\n!\n",
+                     *       "content": "hostname dist-sw-b\n!\ninterface GigabitEthernet1/0/3\n description access sw-b2-03 Gi1/0/49\n switchport mode trunk\n switchport trunk allowed vlan 30,99\n switchport trunk native vlan 99\n!\nsnmp-server community <redacted> RO 20\n!\nend\n",
                      *       "content_hash": "e2a4c6b8d0f1e3a5c7b9d1f3e5a7c9b1d3f5e7a9c1b3d5f7e9a1c3b5d7f9e1a3",
                      *       "device_id": "5e0c7a1d-0000-4000-8000-000000002003",
                      *       "git_commit": "c3e5a7b9d1f2e4c6a8b0d2f4e6c8a0b2d4f6e8a1",
@@ -9635,6 +9916,23 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description A backing store (e.g. the configuration repository) is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Service Unavailable",
+                     *       "status": 503,
+                     *       "detail": null
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     list_config_changes: {
@@ -9642,6 +9940,7 @@ export interface operations {
             query?: {
                 device_id?: string | null;
                 origin?: components["schemas"]["ChangeOrigin"][] | null;
+                /** @description Exact user name. */
                 username?: string | null;
                 /** @description Start of the time range, inclusive (ISO 8601). */
                 from?: string | null;
@@ -9676,6 +9975,7 @@ export interface operations {
                      *             "switchport trunk allowed vlan remove 20"
                      *           ],
                      *           "detected_at": "2026-10-08T22:41:12Z",
+                     *           "detected_by": "change_event",
                      *           "device": {
                      *             "hostname": "dist-sw-b",
                      *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
@@ -9685,11 +9985,25 @@ export interface operations {
                      *           "origin": "external",
                      *           "source_ip": "10.0.0.250",
                      *           "username": "jdoe"
+                     *         },
+                     *         {
+                     *           "after_version_id": "5e0c7a1d-0000-4000-8000-000000006001",
+                     *           "before_version_id": "5e0c7a1d-0000-4000-8000-000000006000",
+                     *           "commands": [],
+                     *           "detected_at": "2026-10-08T02:00:00Z",
+                     *           "detected_by": "scheduled",
+                     *           "device": {
+                     *             "hostname": "dist-sw-b",
+                     *             "id": "5e0c7a1d-0000-4000-8000-000000002003",
+                     *             "mgmt_ip": "10.0.0.11"
+                     *           },
+                     *           "id": "5e0c7a1d-0000-4000-8000-000000006102",
+                     *           "origin": "external"
                      *         }
                      *       ],
                      *       "limit": 50,
                      *       "offset": 0,
-                     *       "total": 1
+                     *       "total": 2
                      *     }
                      */
                     "application/json": components["schemas"]["ConfigChangePage"];
