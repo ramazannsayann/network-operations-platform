@@ -114,6 +114,7 @@ def _device_node(device: m.Device) -> TopologyNode:
         open_alarm_count=0,  # alarms arrive with M3
         prefix=None,
         gateway_ips=[],
+        management_subnet=False,
     )
 
 
@@ -295,6 +296,7 @@ async def _l3(
             )
         )
 
+    management_addresses = await _management_addresses(session)
     with_addresses = {interface.device_id for interface, _ in memberships}
     for device in l3:
         if device.id in with_addresses or not device.mgmt_ip:
@@ -324,9 +326,37 @@ async def _l3(
                 open_alarm_count=0,
                 prefix=network,
                 gateway_ips=sorted(gateways, key=lambda ip: (ip.version, int(ip))),
+                management_subnet=any(
+                    address.version == network.version and address in network
+                    for address in management_addresses
+                ),
             )
         )
     return nodes, sorted(edges, key=lambda edge: edge.id)
+
+
+_INFRASTRUCTURE = (
+    DeviceType.SWITCH,
+    DeviceType.L3_SWITCH,
+    DeviceType.ROUTER,
+    DeviceType.FIREWALL,
+    DeviceType.WLC,
+)
+
+
+async def _management_addresses(
+    session: AsyncSession,
+) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Management addresses of in-scope network devices (all of them, not just those the
+    graph's filters keep): a subnet holding one is a management network."""
+    addresses = await session.scalars(
+        select(m.Device.mgmt_ip).where(
+            m.Device.mgmt_ip.is_not(None),
+            m.Device.device_type.in_(_INFRASTRUCTURE),
+            m.Device.management_status != ManagementStatus.OUT_OF_SCOPE,
+        )
+    )
+    return [ipaddress.ip_address(address) for address in addresses if address]
 
 
 def _network_key(network: IpNetwork) -> tuple[int, int, int]:

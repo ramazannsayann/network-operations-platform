@@ -49,6 +49,7 @@ _CORE_NODE: dict[str, Any] = {
     "open_alarm_count": 0,
     "prefix": None,
     "gateway_ips": [],
+    "management_subnet": False,
 }
 _DIST_NODE: dict[str, Any] = _CORE_NODE | {
     "id": ex.DEV_DIST_B,
@@ -114,6 +115,7 @@ _SUBNET_NODE: dict[str, Any] = {
     "open_alarm_count": 0,
     "prefix": "10.0.20.0/24",
     "gateway_ips": ["10.0.20.1"],
+    "management_subnet": False,
 }
 _ETHERCHANNEL_EDGE: dict[str, Any] = {
     "id": f"etherchannel:{ex.IF_CORE1_PO1}:{ex.IF_DIST_PO1}",
@@ -221,6 +223,10 @@ class TopologyNode(ApiModel):
     prefix: IPvAnyNetwork | None = Field(description="For subnet nodes (L3).")
     gateway_ips: list[IPvAnyAddress] = Field(
         description="HSRP virtual gateway addresses in the subnet (L3 subnet nodes)."
+    )
+    management_subnet: bool = Field(
+        description="L3 subnet nodes: the subnet holds the management address of an in-scope "
+        "switch, router, firewall or WLC (so the map can group or hide management networks)."
     )
 
 

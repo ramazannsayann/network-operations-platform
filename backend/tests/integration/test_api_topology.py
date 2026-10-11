@@ -122,6 +122,12 @@ def test_l3_topology_shows_subnets_and_hsrp(discovered: Discovered) -> None:
         "198.51.100.0/30",
     }  # loopbacks (/32) are not subnets
     assert subnets["10.10.10.0/24"]["gateway_ips"] == ["10.10.10.1"]
+    # Management networks: the switches' VLANs 98/99, not the AP VLAN or the provider link.
+    assert {label for label, n in subnets.items() if n["management_subnet"]} == {
+        "10.255.0.0/27",
+        "10.255.0.64/26",
+    }
+    assert all(not n["management_subnet"] for n in nodes.values() if n["kind"] == "device")
     assert subnets["10.255.0.192/30"]["gateway_ips"] == []
     assert len(graph["edges"]) == 16
 

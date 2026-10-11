@@ -4297,6 +4297,7 @@ export interface components {
          *           "label": "core-sw-1",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001001",
          *           "management_status": "managed",
+         *           "management_subnet": false,
          *           "mgmt_ip": "10.0.0.1",
          *           "model": "C9500-24Y4C",
          *           "open_alarm_count": 0,
@@ -4314,6 +4315,7 @@ export interface components {
          *           "label": "dist-sw-b",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001002",
          *           "management_status": "managed",
+         *           "management_subnet": false,
          *           "mgmt_ip": "10.0.0.11",
          *           "model": "C9300-24T",
          *           "open_alarm_count": 0,
@@ -4331,6 +4333,7 @@ export interface components {
          *           "label": "sw-b2-03",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
          *           "management_status": "managed",
+         *           "management_subnet": false,
          *           "mgmt_ip": "10.0.0.23",
          *           "model": "WS-C2960X-48FPD-L",
          *           "open_alarm_count": 1,
@@ -4348,6 +4351,7 @@ export interface components {
          *           "label": "ap-b2-01",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
          *           "management_status": "unsupported_platform",
+         *           "management_subnet": false,
          *           "mgmt_ip": "10.0.30.41",
          *           "model": "AIR-AP2802I-E-K9",
          *           "open_alarm_count": 0,
@@ -4364,6 +4368,7 @@ export interface components {
          *           "kind": "device",
          *           "label": "isp-ce-1",
          *           "management_status": "out_of_scope",
+         *           "management_subnet": false,
          *           "mgmt_ip": "198.51.100.1",
          *           "model": "ISR4331/K9",
          *           "open_alarm_count": 0,
@@ -4404,6 +4409,7 @@ export interface components {
          *           "label": "core-sw-1",
          *           "location_id": "5e0c7a1d-0000-4000-8000-000000001001",
          *           "management_status": "managed",
+         *           "management_subnet": false,
          *           "mgmt_ip": "10.0.0.1",
          *           "model": "C9500-24Y4C",
          *           "open_alarm_count": 0,
@@ -4419,6 +4425,7 @@ export interface components {
          *           "is_managed": false,
          *           "kind": "subnet",
          *           "label": "10.0.20.0/24",
+         *           "management_subnet": false,
          *           "open_alarm_count": 0,
          *           "out_of_scope": false,
          *           "prefix": "10.0.20.0/24"
@@ -4703,6 +4710,7 @@ export interface components {
          *       "label": "sw-b2-03",
          *       "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
          *       "management_status": "managed",
+         *       "management_subnet": false,
          *       "mgmt_ip": "10.0.0.23",
          *       "model": "WS-C2960X-48FPD-L",
          *       "open_alarm_count": 1,
@@ -4719,6 +4727,7 @@ export interface components {
          *       "kind": "device",
          *       "label": "isp-ce-1",
          *       "management_status": "out_of_scope",
+         *       "management_subnet": false,
          *       "mgmt_ip": "198.51.100.1",
          *       "model": "ISR4331/K9",
          *       "open_alarm_count": 0,
@@ -4734,6 +4743,7 @@ export interface components {
          *       "is_managed": false,
          *       "kind": "subnet",
          *       "label": "10.0.20.0/24",
+         *       "management_subnet": false,
          *       "open_alarm_count": 0,
          *       "out_of_scope": false,
          *       "prefix": "10.0.20.0/24"
@@ -4783,6 +4793,11 @@ export interface components {
              * @description HSRP virtual gateway addresses in the subnet (L3 subnet nodes).
              */
             gateway_ips: string[];
+            /**
+             * Management Subnet
+             * @description L3 subnet nodes: the subnet holds the management address of an in-scope switch, router, firewall or WLC (so the map can group or hide management networks).
+             */
+            management_subnet: boolean;
         };
         /**
          * UserRole
@@ -7000,6 +7015,7 @@ export interface operations {
                      *           "label": "core-sw-1",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001001",
                      *           "management_status": "managed",
+                     *           "management_subnet": false,
                      *           "mgmt_ip": "10.0.0.1",
                      *           "model": "C9500-24Y4C",
                      *           "open_alarm_count": 0,
@@ -7017,6 +7033,7 @@ export interface operations {
                      *           "label": "dist-sw-b",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001002",
                      *           "management_status": "managed",
+                     *           "management_subnet": false,
                      *           "mgmt_ip": "10.0.0.11",
                      *           "model": "C9300-24T",
                      *           "open_alarm_count": 0,
@@ -7034,6 +7051,7 @@ export interface operations {
                      *           "label": "sw-b2-03",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
                      *           "management_status": "managed",
+                     *           "management_subnet": false,
                      *           "mgmt_ip": "10.0.0.23",
                      *           "model": "WS-C2960X-48FPD-L",
                      *           "open_alarm_count": 1,
@@ -7051,6 +7069,7 @@ export interface operations {
                      *           "label": "ap-b2-01",
                      *           "location_id": "5e0c7a1d-0000-4000-8000-000000001003",
                      *           "management_status": "unsupported_platform",
+                     *           "management_subnet": false,
                      *           "mgmt_ip": "10.0.30.41",
                      *           "model": "AIR-AP2802I-E-K9",
                      *           "open_alarm_count": 0,
@@ -7067,6 +7086,7 @@ export interface operations {
                      *           "kind": "device",
                      *           "label": "isp-ce-1",
                      *           "management_status": "out_of_scope",
+                     *           "management_subnet": false,
                      *           "mgmt_ip": "198.51.100.1",
                      *           "model": "ISR4331/K9",
                      *           "open_alarm_count": 0,
