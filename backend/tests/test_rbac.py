@@ -3,7 +3,8 @@ mapping in netops.auth.rbac grants (no database: the principal is a dependency o
 """
 
 import re
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from http import HTTPStatus
 from typing import Any
 
 import pytest
@@ -13,10 +14,16 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from netops.api.app import build_api
-from netops.api.problems import FORBIDDEN, MFA_ENROLLMENT_REQUIRED, PASSWORD_CHANGE_REQUIRED
+from netops.api.problems import (
+    FORBIDDEN,
+    MFA_ENROLLMENT_REQUIRED,
+    PASSWORD_CHANGE_REQUIRED,
+    ProblemError,
+)
 from netops.api.security import PERMISSION_EXTENSION, RequirePermission, get_principal
 from netops.auth.rbac import ROLE_PERMISSIONS, Permission
 from netops.db.enums import UserRole
+from netops.db.session import get_session
 from tests.conftest import principal
 from tests.test_api_contract import OTHER_ID, PUBLIC_OPERATIONS, REQUIRED_QUERY, SOME_ID
 
@@ -144,12 +151,19 @@ def denials(monkeypatch: pytest.MonkeyPatch) -> Denials:
     return recorder
 
 
+async def no_database() -> AsyncIterator[Any]:
+    raise ProblemError(HTTPStatus.SERVICE_UNAVAILABLE, detail="No database in unit tests.")
+    yield  # pragma: no cover - makes this a generator dependency like get_session
+
+
 def client_as(role: str, requirements: tuple[str, ...] = ()) -> TestClient:
     app = build_api()
     app.dependency_overrides[get_principal] = lambda: principal(role, requirements)
-    # Allowed requests reach handlers that need the database, which unit tests do not
-    # have: any answer but 401/403 shows the permission check let them through.
-    return TestClient(app, raise_server_exceptions=False)
+    # Unit tests have no database: allowed requests stop with 503 where a handler would
+    # open a session. Any answer but 401/403 shows the permission check let them through;
+    # denied ones must get their 403 before any dependency touches the database.
+    app.dependency_overrides[get_session] = no_database
+    return TestClient(app)
 
 
 MATRIX = [

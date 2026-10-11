@@ -131,8 +131,8 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
 - There are no default accounts: the first admin comes from `netops users create-admin`.
   Never commit a usable password, TOTP secret or recovery code; tests that sign in
   generate theirs at random.
-- Unit tests: the `client` fixture signs in as an operator (`principal(role)` in
-  `tests/conftest.py`), `anonymous_client` sends no token. Integration tests sign in for
+- Unit tests: the `client` fixture signs in as an admin (`principal(role)` in
+  `tests/conftest.py` for other roles), `anonymous_client` sends no token. Integration tests sign in for
   real (`tests/integration/support.py`: `add_user`, `sign_in`).
 - The browser keeps the access token in memory only (`frontend/src/auth/session.ts`);
   never put it in storage, a cookie or a URL.
