@@ -1,0 +1,151 @@
+# The fake lab: a small campus served by fake SSH devices (netops_fakes).
+#
+# Everything here is made up. Management addresses are in 10.255.0.0/24 (the subnet
+# discovery is allowed to scan), user VLANs in 10.10.0.0/16, the provider link in
+# 198.51.100.0/24 (TEST-NET-2, RFC 5737). See lab/fakelab/README.md for what each device
+# is there to test.
+name: fakelab
+domain: lab.example.net
+management_subnet: 10.255.0.0/24
+
+vlans:
+  - {id: 10, name: STAFF, subnet: 10.10.10.0/24}
+  - {id: 20, name: STUDENTS, subnet: 10.10.20.0/24}
+  - {id: 30, name: APS, subnet: 10.255.0.32/27}
+  - {id: 98, name: MGMT-B, subnet: 10.255.0.64/26, management: true}
+  - {id: 99, name: MGMT, subnet: 10.255.0.0/27, management: true}
+
+devices:
+  - name: rtr1
+    kind: router
+    role: edge
+    model: ISR4331/K9
+    serials: [FDO1111R001]
+    mgmt_ip: 10.255.0.129
+    loopback: 10.255.0.129
+
+  # Provider router: CDP neighbour of rtr1, management address outside the allowed subnet.
+  # Discovery must record it as out_of_scope and never connect to it.
+  - name: isp-ce1
+    kind: router
+    external: true
+    model: ISR4451-X/K9
+    serials: [FDO9999X001]
+    mgmt_ip: 198.51.100.1
+
+  - name: core1
+    kind: l3_switch
+    role: core
+    model: C9300-48T
+    serials: [FOC1111C001]
+    mgmt_ip: 10.255.0.2
+    loopback: 10.255.0.130
+    stp_priority: 24576  # spanning-tree root
+    hsrp_active: [10, 98, 99]
+
+  - name: core2
+    kind: l3_switch
+    role: core
+    model: C9300-48T
+    serials: [FOC1111C002]
+    mgmt_ip: 10.255.0.3
+    loopback: 10.255.0.131
+    stp_priority: 28672
+    hsrp_active: [20, 30]
+
+  - name: dist1
+    kind: switch
+    role: distribution
+    model: C9300-24T
+    serials: [FOC1111D001]
+    mgmt_ip: 10.255.0.11
+
+  # Two-member stack, reachable via 10.255.0.12 (VLAN 99, advertised to the cores) and
+  # 10.255.0.70 (VLAN 98, advertised to access3/access4): discovery must create it once.
+  - name: dist2
+    kind: switch
+    role: distribution
+    model: C9300-24T
+    serials: [FOC1111D002, FOC1111D003]
+    mgmt_ip: 10.255.0.12
+    extra_svis:
+      - {vlan: 98, ip: 10.255.0.70}
+
+  - name: access1
+    kind: switch
+    role: access
+    model: WS-C2960X-48FPD-L
+    os: ios
+    version: 15.2(7)E10
+    serials: [FOC1111A001]
+    mgmt_ip: 10.255.0.21
+    hosts:
+      - {port: Gi1/0/1, vlan: 10, ip: 10.10.10.101}
+      - {port: Gi1/0/2, vlan: 20, ip: 10.10.20.101}
+      - {port: Gi1/0/3, vlan: 20, ip: 10.10.20.102}
+
+  - name: access2
+    kind: switch
+    role: access
+    model: C9200L-24P-4G
+    serials: [JAE1111A002]
+    mgmt_ip: 10.255.0.22
+    hosts:
+      - {port: Gi1/0/1, vlan: 10, ip: 10.10.10.102}
+      - {port: Gi1/0/2, vlan: 20, ip: 10.10.20.103}
+
+  # Access point behind access2: seen via CDP only; not an IOS device we manage.
+  - name: ap1
+    kind: ap
+    external: true
+    model: AIR-AP2802I-E-K9
+    version: 8.10.185.0
+    serials: [FGL1111W001]
+    mgmt_ip: 10.255.0.40
+
+  - name: access3
+    kind: switch
+    role: access
+    model: WS-C2960X-48FPD-L
+    os: ios
+    version: 15.2(7)E10
+    serials: [FOC1111A003]
+    mgmt_ip: 10.255.0.73
+    hosts:
+      - {port: Gi1/0/1, vlan: 10, ip: 10.10.10.103}
+      - {port: Gi1/0/2, vlan: 20, ip: 10.10.20.104}
+
+  # Configured with a password nobody knows: discovery must report auth_failed after at
+  # most two login attempts.
+  - name: access4
+    kind: switch
+    role: access
+    model: WS-C2960X-48FPD-L
+    os: ios
+    version: 15.2(7)E10
+    serials: [FOC1111A004]
+    mgmt_ip: 10.255.0.74
+    credentials: wrong
+    hosts:
+      - {port: Gi1/0/1, vlan: 20, ip: 10.10.20.105}
+
+links:
+  # core1 <-> core2: two-member LACP EtherChannel (Port-channel1).
+  - {a: core1 Te1/1/1, b: core2 Te1/1/1, channel: 1}
+  - {a: core1 Te1/1/2, b: core2 Te1/1/2, channel: 1}
+  # Cores <-> router: routed /30s with OSPF.
+  - {a: core1 Gi1/0/48, b: rtr1 Gi0/0/1, subnet: 10.255.0.192/30}
+  - {a: core2 Gi1/0/48, b: rtr1 Gi0/0/2, subnet: 10.255.0.196/30}
+  # Router <-> provider (not in OSPF; static default route).
+  - {a: isp-ce1 Gi0/0/1, b: rtr1 Gi0/0/0, subnet: 198.51.100.0/30}
+  # Distribution, dual-homed (dist2's uplinks on different stack members).
+  - {a: core1 Te1/1/3, b: dist1 Te1/1/1}
+  - {a: core2 Te1/1/3, b: dist1 Te1/1/2}
+  - {a: core1 Te1/1/4, b: dist2 Te1/1/1}
+  - {a: core2 Te1/1/4, b: dist2 Te2/1/1}
+  # Access.
+  - {a: dist1 Gi1/0/1, b: access1 Gi1/0/49}
+  - {a: dist1 Gi1/0/2, b: access2 Gi1/1/1}
+  - {a: dist2 Gi1/0/1, b: access3 Gi1/0/49}
+  - {a: dist2 Gi2/0/1, b: access4 Gi1/0/49}
+  - {a: access2 Gi1/0/24, b: ap1 Gi0}

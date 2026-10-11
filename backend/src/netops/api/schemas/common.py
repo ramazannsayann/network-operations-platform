@@ -1,6 +1,5 @@
 """Building blocks shared by every API schema: base model, list envelope, references, jobs."""
 
-from enum import StrEnum
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -15,6 +14,7 @@ from pydantic import (
 
 from netops.api.problems import Problem
 from netops.api.schemas import examples as ex
+from netops.db.enums import JobKind, JobStatus
 
 # Canonical string forms (ADR-0003): lower-case colon-separated MACs, 802.1Q VLAN IDs.
 MacAddress = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")]
@@ -69,19 +69,7 @@ class LocationRef(ApiModel):
     path: str = Field(description="Full path from the top-level location, for display.")
 
 
-# --- Jobs (long-running operations) ---------------------------------------------------------
-
-
-class JobKind(StrEnum):
-    DEVICE_REFRESH = "device_refresh"
-    DISCOVERY = "discovery"
-
-
-class JobStatus(StrEnum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
+# --- Jobs (long-running operations; JobKind and JobStatus are stored in the jobs table) ------
 
 
 class JobRef(ApiModel):

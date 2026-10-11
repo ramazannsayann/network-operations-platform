@@ -3,10 +3,11 @@
 COMPOSE := docker compose -f deploy/docker-compose.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help install env up down logs ps migrate test test-integration lint format openapi mock
+.PHONY: help install env up down logs ps migrate test test-integration test-scale lint format openapi mock \
+	fakelab-compose fakelab-up fakelab-seed fakelab-discover fakelab-accuracy fakelab-down
 
 help: ## List available targets
-	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-9s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # A new Fernet key: 32 random bytes, URL-safe base64.
 NEW_FERNET_KEY = $$(openssl rand -base64 32 | tr '+/' '-_')
@@ -47,10 +48,16 @@ test: ## Run the backend unit tests (no database or network needed)
 	cd backend && uv run pytest
 
 # Credentials come from deploy/.env; the tests create their own netops_test database.
-test-integration: env ## Run integration tests against the compose db (needs `make up`)
-	set -a && . ./deploy/.env && set +a && cd backend && \
+TEST_DB_ENV = set -a && . ./deploy/.env && set +a && cd backend && \
 	TEST_POSTGRES_PORT="$${DB_HOST_PORT:-5433}" TEST_POSTGRES_USER="$$POSTGRES_USER" \
-	TEST_POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" uv run pytest -m integration
+	TEST_POSTGRES_PASSWORD="$$POSTGRES_PASSWORD"
+
+test-integration: env ## Run integration tests against the compose db (needs `make up`)
+	$(TEST_DB_ENV) uv run pytest -m "integration and not scale"
+
+SCALE_DEVICES ?= 50
+test-scale: env ## Discover a generated campus of SCALE_DEVICES (default 50) and time it
+	$(TEST_DB_ENV) SCALE_DEVICES=$(SCALE_DEVICES) uv run pytest -m scale
 
 openapi: ## Regenerate docs/api/openapi.json and the frontend's TypeScript types from the code
 	cd backend && uv run python -m netops.api.export_openapi ../docs/api/openapi.json
@@ -66,3 +73,41 @@ lint: ## Lint, format-check and type-check backend and frontend
 format: ## Auto-fix lint issues and format all code
 	cd backend && uv run ruff check --fix . && uv run ruff format .
 	cd frontend && npm run format
+
+# --- Fake lab (lab/fakelab/topology.yaml): fake Cisco devices in containers ---------------------
+
+COMPOSE_FAKELAB := $(COMPOSE) -f deploy/docker-compose.fakelab.yml --profile fakelab
+FAKELAB_SEED := 10.255.0.2
+FAKELAB_SUBNET := 10.255.0.0/24
+
+fakelab-compose: ## Regenerate deploy/docker-compose.fakelab.yml from the topology file
+	cd backend && uv run python -m netops_fakes.compose ../lab/fakelab/topology.yaml \
+	  > ../deploy/docker-compose.fakelab.yml
+
+fakelab-up: env ## Start the stack plus the fake lab's devices (worker joins 10.255.0.0/24)
+	@grep -q '^FAKELAB_PASSWORD=' deploy/.env || { \
+	  echo "FAKELAB_PASSWORD=$$(openssl rand -hex 16)" >> deploy/.env; \
+	  echo "Added a random FAKELAB_PASSWORD to deploy/.env."; }
+	$(COMPOSE_FAKELAB) up --build --detach --wait
+
+# Two profiles: an outdated one (random password no device accepts) and the lab's, so
+# discovery shows the two-attempt login and remembers the profile that worked.
+fakelab-seed: ## Create the fake lab's credential profiles (netops credentials add)
+	@set -a && . ./deploy/.env && set +a && \
+	openssl rand -hex 16 | $(COMPOSE_FAKELAB) exec -T api netops credentials add \
+	  fakelab-outdated --username "$${FAKELAB_USERNAME:-netops-ro}" --password-stdin --update && \
+	printf '%s\n' "$$FAKELAB_PASSWORD" | $(COMPOSE_FAKELAB) exec -T api netops credentials add \
+	  fakelab --username "$${FAKELAB_USERNAME:-netops-ro}" --password-stdin --update
+
+fakelab-discover: ## Discover the fake lab from core1 and wait for the result
+	$(COMPOSE_FAKELAB) exec -T api netops discover --seed $(FAKELAB_SEED) \
+	  --subnet $(FAKELAB_SUBNET) --profile fakelab-outdated --profile fakelab
+	$(COMPOSE_FAKELAB) exec -T api netops devices list
+
+fakelab-accuracy: ## Compare the inventory with lab/fakelab/topology.yaml (precision/recall)
+	set -a && . ./deploy/.env && set +a && cd backend && \
+	POSTGRES_HOST=127.0.0.1 POSTGRES_PORT="$${DB_HOST_PORT:-5433}" \
+	uv run python ../tools/eval/discovery_accuracy.py ../lab/fakelab/topology.yaml
+
+fakelab-down: ## Stop the whole stack including the fake lab (start again with make up)
+	$(COMPOSE_FAKELAB) down

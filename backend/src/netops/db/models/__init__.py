@@ -9,7 +9,9 @@ from netops.db.models.collection import CollectionRun
 from netops.db.models.configuration import ConfigChange, ConfigVersion
 from netops.db.models.credentials import CredentialProfile
 from netops.db.models.diagnosis import Finding
+from netops.db.models.discovery import DiscoveryRun, DiscoveryRunItem
 from netops.db.models.inventory import Device, DeviceSerial, Interface, InterfaceAddress, Location
+from netops.db.models.jobs import Job
 from netops.db.models.monitoring import Alarm, Event, Incident, Metric
 from netops.db.models.observations import (
     ArpEntry,
@@ -34,6 +36,8 @@ __all__ = [
     "CredentialProfile",
     "Device",
     "DeviceSerial",
+    "DiscoveryRun",
+    "DiscoveryRunItem",
     "Event",
     "Finding",
     "HsrpObservation",
@@ -41,6 +45,7 @@ __all__ = [
     "Interface",
     "InterfaceAddress",
     "InterfaceSnapshot",
+    "Job",
     "Link",
     "Location",
     "MacEntry",

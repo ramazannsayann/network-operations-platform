@@ -53,6 +53,21 @@ class DiscoverySource(StrEnum):
     MANUAL = "manual"
 
 
+class ManagementStatus(StrEnum):
+    """Whether the platform manages a device, and if not, why (set by discovery).
+
+    Discovery also records devices it does not log in to, so they appear on the topology
+    map; this flag lets the map mark them without joining discovery history.
+    """
+
+    MANAGED = "managed"
+    OUT_OF_SCOPE = "out_of_scope"  # management address outside the allowed subnets
+    AUTH_FAILED = "auth_failed"  # no credential profile was accepted
+    UNREACHABLE = "unreachable"
+    UNSUPPORTED_PLATFORM = "unsupported_platform"  # e.g. an access point or IP phone
+    MANUAL = "manual"  # added by hand, not (yet) seen by discovery
+
+
 class InterfaceKind(StrEnum):
     PHYSICAL = "physical"
     PORT_CHANNEL = "port_channel"
@@ -102,6 +117,33 @@ class LinkSource(StrEnum):
 class NeighborProtocol(StrEnum):
     CDP = "cdp"
     LLDP = "lldp"
+
+
+class DiscoveryItemStatus(StrEnum):
+    """Outcome for one address (or address-less neighbour) in a discovery run."""
+
+    DISCOVERED = "discovered"
+    DUPLICATE = "duplicate"  # another address of a device this run already reached
+    AUTH_FAILED = "auth_failed"
+    UNREACHABLE = "unreachable"
+    OUT_OF_SCOPE = "out_of_scope"
+    UNSUPPORTED_PLATFORM = "unsupported_platform"
+    NO_MGMT_IP = "no_mgmt_ip"  # neighbour advertised no management address
+
+
+# --- Jobs (long-running operations started through the API) -------------------------------
+
+
+class JobKind(StrEnum):
+    DEVICE_REFRESH = "device_refresh"
+    DISCOVERY = "discovery"
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 # --- Collection runs ----------------------------------------------------------------------
@@ -273,12 +315,16 @@ ALL_ENUMS: tuple[type[StrEnum], ...] = (
     OsFamily,
     Reachability,
     DiscoverySource,
+    ManagementStatus,
     InterfaceKind,
     Duplex,
     SwitchportMode,
     VlanStatus,
     LinkSource,
     NeighborProtocol,
+    DiscoveryItemStatus,
+    JobKind,
+    JobStatus,
     CollectionKind,
     CollectionTrigger,
     CollectionStatus,

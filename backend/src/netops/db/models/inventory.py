@@ -13,6 +13,7 @@ from netops.db.enums import (
     DeviceType,
     DiscoverySource,
     InterfaceKind,
+    ManagementStatus,
     OsFamily,
     Reachability,
 )
@@ -57,6 +58,7 @@ class Device(EntityMixin, SeenMixin, Base):
         CheckConstraint("hostname IS NOT NULL OR mgmt_ip IS NOT NULL", name="identifiable"),
         host_address("mgmt_ip"),
         CheckConstraint(r"sys_object_id ~ '^[0-9]+(\.[0-9]+)*$'", name="sys_object_id_format"),
+        CheckConstraint("ssh_port BETWEEN 1 AND 65535", name="ssh_port_valid"),
         # Search and CDP/LLDP neighbour resolution by name.
         Index("ix_devices_hostname", "hostname"),
         # Devices of a location; also used when a location is deleted (SET NULL).
@@ -74,6 +76,8 @@ class Device(EntityMixin, SeenMixin, Base):
     role: Mapped[DeviceRole] = mapped_column(
         default=DeviceRole.UNKNOWN, server_default=DeviceRole.UNKNOWN.value
     )
+    # Set when an operator chose the role; discovery's role heuristic then leaves it alone.
+    role_is_manual: Mapped[bool] = mapped_column(default=False, server_default=false())
     vendor: Mapped[str | None]
     model: Mapped[str | None]
     os_family: Mapped[OsFamily] = mapped_column(
@@ -86,6 +90,10 @@ class Device(EntityMixin, SeenMixin, Base):
     )
     # Only managed devices are polled and configured (credentials, allowed subnets).
     is_managed: Mapped[bool] = mapped_column(default=False, server_default=false())
+    # Why discovery does (not) manage the device; unmanaged devices are map placeholders.
+    management_status: Mapped[ManagementStatus] = mapped_column(
+        default=ManagementStatus.MANUAL, server_default=ManagementStatus.MANUAL.value
+    )
     reachability: Mapped[Reachability] = mapped_column(
         default=Reachability.UNKNOWN, server_default=Reachability.UNKNOWN.value
     )
@@ -95,6 +103,8 @@ class Device(EntityMixin, SeenMixin, Base):
     credential_profile_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("credential_profiles.id", ondelete="RESTRICT")
     )
+    # SSH port of this device; NULL uses the global SSH_PORT.
+    ssh_port: Mapped[int | None]
 
 
 class DeviceSerial(SeenMixin, Base):

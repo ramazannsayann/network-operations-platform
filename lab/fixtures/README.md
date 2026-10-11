@@ -1,7 +1,8 @@
 # Device output fixtures
 
 Raw CLI output that the parser tests (`backend/tests/test_parsing.py`), the collector tests
-and the fake SSH device (`backend/tests/fakes/fakedevice.py`) use. Nothing here comes from
+and the fake SSH device (`backend/src/netops_fakes/device.py`) use; the fake lab generator
+(`netops_fakes.render`) follows these formats. Nothing here comes from
 the university network, the pilot or any other real network (see "Never commit" in
 [CONTRIBUTING.md](../../CONTRIBUTING.md)).
 

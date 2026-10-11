@@ -2,8 +2,11 @@
 
 from typing import Annotated, Any
 
-from fastapi import Query, status
+from fastapi import Depends, Query, status
 from pydantic import AwareDatetime
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from netops.db.session import get_session
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 500
@@ -36,3 +39,27 @@ ACCEPTED: dict[int | str, dict[str, Any]] = {
         "headers": {"Location": {"description": "URL of the job.", "schema": {"type": "string"}}},
     }
 }
+
+
+# --- Dependencies of implemented endpoints --------------------------------------------------
+
+Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+class TaskQueue:
+    """Hands work to the Celery workers (by task name, so the API does not import task code).
+
+    A dependency so that API tests can record the calls instead of needing a broker.
+    """
+
+    def __call__(self, task: str, *args: Any) -> None:
+        from netops.workers.celery_app import celery_app
+
+        celery_app.send_task(task, args=list(args))
+
+
+def get_task_queue() -> TaskQueue:
+    return TaskQueue()
+
+
+Enqueue = Annotated[TaskQueue, Depends(get_task_queue)]

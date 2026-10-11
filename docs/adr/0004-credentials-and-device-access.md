@@ -91,7 +91,8 @@ every new device fail.
 - Docker secrets or a KMS instead of an environment variable for `CREDENTIALS_KEY`.
 - A second reference for the SNMPv3 profile on devices (M3), credential CRUD in the API and
   UI, and an audit trail of credential use (M7).
-- A per-device SSH port (all devices use `SSH_PORT`, default 22).
+- ~~A per-device SSH port~~: added in step 6 (`devices.ssh_port`, falls back to
+  `SSH_PORT`; see [ADR-0005](0005-discovery.md)).
 
 ## Consequences
 

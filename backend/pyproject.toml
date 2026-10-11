@@ -14,15 +14,31 @@ dependencies = [
     "nornir-netmiko>=1.0.1",
     "ntc-templates>=9.3.0",
     "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
     "redis>=6.4.0",
     "sqlalchemy[asyncio]>=2.1.4",
     "textfsm>=2.1.0",
+    "typer>=0.27.3",
     "uvicorn[standard]>=0.54.0",
 ]
+
+# Only the fakelab container image needs the fake SSH server (netops_fakes.device).
+[project.optional-dependencies]
+fakelab = [
+    "asyncssh>=2.24.1",
+]
+
+[project.scripts]
+netops = "netops.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.12.24,<0.13.0"]
 build-backend = "uv_build"
+
+# netops_fakes: the fake lab (topology, generated device output, fake SSH devices). Shipped
+# in the same package so tests and the fakelab containers share it; netops never imports it.
+[tool.uv.build-backend]
+module-name = ["netops", "netops_fakes"]
 
 [dependency-groups]
 dev = [
@@ -35,6 +51,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-socket>=0.8.1",
     "ruff>=0.16.10",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.ruff]
@@ -71,7 +88,7 @@ select = [
 python_version = "3.12"
 strict = true
 warn_unreachable = true
-files = ["src/netops"]
+files = ["src/netops", "src/netops_fakes"]
 plugins = ["pydantic.mypy"]
 
 # Libraries without type information; their results are typed where netops uses them.
@@ -94,4 +111,5 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config --disable-socket --allow-unix-socket -m 'not integration'"
 markers = [
     "integration: needs the compose database on localhost; run with `make test-integration`",
+    "scale: discovery of a generated topology (also integration); run with `make test-scale`",
 ]

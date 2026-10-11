@@ -58,6 +58,18 @@ EXPECTED_V1_OPERATIONS = {
     ("GET", "/api/v1/jobs/{job_id}"),
 }
 PUBLIC_OPERATIONS = {("GET", "/api/health"), ("POST", "/api/v1/auth/login")}
+# Implemented for real (step 6); they need the database and are tested in
+# tests/integration/test_api.py. Every other v1 route is still a 501 stub.
+IMPLEMENTED_OPERATIONS = {
+    ("GET", "/api/v1/devices"),
+    ("GET", "/api/v1/devices/{device_id}"),
+    ("POST", "/api/v1/devices/{device_id}/refresh"),
+    ("GET", "/api/v1/devices/{device_id}/interfaces"),
+    ("POST", "/api/v1/discovery/runs"),
+    ("GET", "/api/v1/discovery/runs"),
+    ("GET", "/api/v1/discovery/runs/{run_id}"),
+    ("GET", "/api/v1/jobs/{job_id}"),
+}
 
 SOME_ID = "5e0c7a1d-0000-4000-8000-000000002004"
 OTHER_ID = "5e0c7a1d-0000-4000-8000-000000006001"
@@ -88,8 +100,10 @@ def test_v1_routes_match_the_contract(spec: dict[str, Any]) -> None:
     assert v1 == EXPECTED_V1_OPERATIONS
 
 
-@pytest.mark.parametrize(("method", "path"), sorted(EXPECTED_V1_OPERATIONS))
-def test_every_v1_route_is_a_501_stub(
+@pytest.mark.parametrize(
+    ("method", "path"), sorted(EXPECTED_V1_OPERATIONS - IMPLEMENTED_OPERATIONS)
+)
+def test_every_other_v1_route_is_a_501_stub(
     client: TestClient, spec: dict[str, Any], method: str, path: str
 ) -> None:
     operation = _operations(spec)[(method, path)]

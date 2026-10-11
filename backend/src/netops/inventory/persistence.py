@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from netops.core.ifname import interface_kind
 from netops.db.enums import CollectionKind, CollectionStatus, CollectionTrigger, Reachability
 from netops.db.models import CollectionRun, Device, Interface, Observation
-from netops.inventory.collectors import COLLECTORS, Collector
+from netops.inventory.collectors import COLLECTORS, commands_for
 from netops.parsing import CommandError, ParseError, parse
 
 logger = logging.getLogger(__name__)
@@ -130,11 +130,11 @@ async def fail_run(session: AsyncSession, run_id: uuid.UUID, error: str) -> Coll
 
 
 def _parse_outputs(
-    collector: Collector, outputs: Mapping[str, str], command_errors: Mapping[str, str]
+    commands: Sequence[str], outputs: Mapping[str, str], command_errors: Mapping[str, str]
 ) -> tuple[dict[str, Any], list[str]]:
     parsed: dict[str, Any] = {}
     errors: list[str] = []
-    for command in collector.commands:
+    for command in commands:
         if command in command_errors:
             errors.append(f"{command}: {command_errors[command]}")
             continue
@@ -163,8 +163,9 @@ async def complete_run(
     if run is None or device is None:
         raise LookupError(f"run {run_id} or device {device_id} does not exist")
     collector = COLLECTORS[run.kind]
+    commands = commands_for(run.kind, device.device_type)
 
-    parsed, errors = _parse_outputs(collector, outputs, command_errors or {})
+    parsed, errors = _parse_outputs(commands, outputs, command_errors or {})
     missing_required = collector.required - parsed.keys()
     if not parsed or missing_required:
         return await fail_run(session, run_id, "\n".join(errors))

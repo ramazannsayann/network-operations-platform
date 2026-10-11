@@ -1,15 +1,15 @@
 # Lab
 
-Placeholder for everything we need to develop and test against Cisco IOS/IOS-XE
-networks **without touching production equipment**. Nothing here is used yet.
+Everything we need to develop and test against Cisco IOS/IOS-XE networks **without
+touching production equipment**.
 
-Planned contents:
-
-- `topologies/`: lab topology definitions (e.g. Cisco Modeling Labs, GNS3 or EVE-NG
-  exports) for the campus network we develop against, with a diagram and addressing plan.
-- `fixtures/`: captured device output used by unit tests: `show` command output, SNMP
-  walks, running configurations. Tests parse these files; they never connect to a device.
-- Notes on how to bring the lab up and point a local stack at it.
+- `fixtures/`: device output used by the parser and collector tests (provenance in
+  [fixtures/README.md](fixtures/README.md)). Tests parse these files; they never connect to
+  a device.
+- `fakelab/`: a made-up campus (`topology.yaml`) served by fake SSH devices, in tests and in
+  containers; see [fakelab/README.md](fakelab/README.md).
+- Planned: the real lab's topology (CML / physical lab) in the same format, for
+  `tools/eval/discovery_accuracy.py`, and notes on pointing a local stack at it.
 
 Rules for this directory (see "Never commit" in CONTRIBUTING.md):
 
