@@ -2,7 +2,11 @@
 
 IOS prints a header with the config size and timestamps of the last change and the last
 NVRAM save; ``ntp clock-period`` is rewritten by the device as the clock drifts. None of
-them is a configuration change, so they are dropped before hashing and committing.
+them is a configuration change, so they are dropped before hashing and committing, along
+with the bare ``!`` separators the header leaves at the top.
+
+Changing these rules changes the hash of an unchanged configuration: the next backup of
+every device then records a version whose diff shows only the normalization.
 """
 
 import hashlib
@@ -27,7 +31,7 @@ def normalize(raw: str) -> str:
     and exactly one final newline."""
     lines = [line.rstrip() for line in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
     kept = [line for line in lines if not _VOLATILE.match(line.strip())]
-    while kept and not kept[0].strip():
+    while kept and kept[0].strip() in ("", "!"):
         kept.pop(0)
     while kept and not kept[-1].strip():
         kept.pop()

@@ -37,7 +37,7 @@ end\r
 
 
 def test_normalize_drops_volatile_lines_and_fixes_line_ends() -> None:
-    assert normalize(RAW) == "!\n!\nversion 17.9\nhostname dist1\n!\nend\n"
+    assert normalize(RAW) == "version 17.9\nhostname dist1\n!\nend\n"
 
 
 def test_volatile_lines_do_not_change_the_hash() -> None:
