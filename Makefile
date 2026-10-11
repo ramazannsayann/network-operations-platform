@@ -12,18 +12,24 @@ help: ## List available targets
 
 # A new Fernet key: 32 random bytes, URL-safe base64.
 NEW_FERNET_KEY = $$(openssl rand -base64 32 | tr '+/' '-_')
+NEW_SIGNING_KEY = $$(openssl rand -hex 32)
 
 # Created on first use from the example, with a random database password and a random
 # credentials key; `env` adds the key to files created before it existed.
 deploy/.env:
 	@sed -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$(openssl rand -hex 24)/" \
-	     -e "s/^CREDENTIALS_KEY=.*/CREDENTIALS_KEY=$(NEW_FERNET_KEY)/" deploy/.env.example > $@
-	@echo "Created $@ with a random POSTGRES_PASSWORD and CREDENTIALS_KEY."
+	     -e "s/^CREDENTIALS_KEY=.*/CREDENTIALS_KEY=$(NEW_FERNET_KEY)/" \
+	     -e "s/^AUTH_SIGNING_KEY=.*/AUTH_SIGNING_KEY=$(NEW_SIGNING_KEY)/" deploy/.env.example > $@
+	@echo "Created $@ with a random POSTGRES_PASSWORD, CREDENTIALS_KEY and AUTH_SIGNING_KEY."
 
 env: deploy/.env
 	@grep -q '^CREDENTIALS_KEY=' deploy/.env || { \
 	  echo "CREDENTIALS_KEY=$(NEW_FERNET_KEY)" >> deploy/.env; \
 	  echo "Added a random CREDENTIALS_KEY to deploy/.env; back it up (see ADR-0004)."; }
+	@grep -Eq '^AUTH_SIGNING_KEY=.{32,}$$' deploy/.env || { \
+	  sed -i.bak '/^AUTH_SIGNING_KEY=/d' deploy/.env && rm -f deploy/.env.bak; \
+	  echo "AUTH_SIGNING_KEY=$(NEW_SIGNING_KEY)" >> deploy/.env; \
+	  echo "Added a random AUTH_SIGNING_KEY to deploy/.env (signs access tokens, ADR-0008)."; }
 
 install: ## Install backend + frontend dependencies and the git pre-commit hooks
 	cd backend && uv sync
