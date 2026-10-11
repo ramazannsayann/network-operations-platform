@@ -24,7 +24,8 @@ import { RelativeTime } from '../../components/RelativeTime'
 import { MfaEnrollment } from './MfaEnrollment'
 import { PasswordForm } from './PasswordForm'
 
-function DisableMfa({ onClose }: { onClose: () => void }) {
+/** Turn MFA off; where the role requires it, that means setting it up again right away. */
+function DisableMfa({ required, onClose }: { required: boolean; onClose: () => void }) {
   const { t } = useTranslation()
   const { reload } = useAuth()
   const disable = useDisableMfa()
@@ -32,7 +33,7 @@ function DisableMfa({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState('')
   return (
     <Stack gap="sm">
-      <Text size="sm">{t('account.mfa.disableBody')}</Text>
+      <Text size="sm">{t(required ? 'account.mfa.resetBody' : 'account.mfa.disableBody')}</Text>
       <PasswordInput
         label={t('account.password.current')}
         autoComplete="current-password"
@@ -55,7 +56,7 @@ function DisableMfa({ onClose }: { onClose: () => void }) {
           {t('common.close')}
         </Button>
         <Button
-          color="red"
+          color={required ? undefined : 'red'}
           loading={disable.isPending}
           disabled={!password || !code}
           onClick={() => {
@@ -73,7 +74,7 @@ function DisableMfa({ onClose }: { onClose: () => void }) {
             )
           }}
         >
-          {t('account.mfa.disable')}
+          {t(required ? 'account.mfa.reset' : 'account.mfa.disable')}
         </Button>
       </Group>
     </Stack>
@@ -218,12 +219,12 @@ export function ProfilePage() {
           {me.mfa_enabled ? (
             <Button
               variant="light"
-              color="red"
+              color={me.mfa_required ? undefined : 'red'}
               onClick={() => {
                 setDisabling(true)
               }}
             >
-              {t('account.mfa.disable')}
+              {t(me.mfa_required ? 'account.mfa.reset' : 'account.mfa.disable')}
             </Button>
           ) : enrolling ? (
             <MfaEnrollment
@@ -249,9 +250,10 @@ export function ProfilePage() {
         onClose={() => {
           setDisabling(false)
         }}
-        title={t('account.mfa.disable')}
+        title={t(me.mfa_required ? 'account.mfa.reset' : 'account.mfa.disable')}
       >
         <DisableMfa
+          required={me.mfa_required}
           onClose={() => {
             setDisabling(false)
           }}

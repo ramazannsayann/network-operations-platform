@@ -570,6 +570,8 @@
       "enable": "Turn on two-factor authentication",
       "disable": "Turn off two-factor authentication",
       "disableBody": "Turning it off needs your password and a verification or recovery code.",
+      "reset": "Set up again (e.g. new phone)",
+      "resetBody": "The current setup is removed and you set it up again right away, e.g. when moving to a new phone. This needs your password and a verification or recovery code.",
       "codeOrRecovery": "Verification code or recovery code",
       "codesOnce": "These recovery codes are shown only now. Each lets you sign in once if you cannot reach your phone; keep them somewhere safe.",
       "copied": "Copied",

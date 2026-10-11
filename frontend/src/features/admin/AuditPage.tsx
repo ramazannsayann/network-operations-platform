@@ -56,7 +56,8 @@ function OutcomeBadge({ outcome }: { outcome: Schemas['AuditOutcome'] }) {
       color={look.color}
       variant="light"
       leftSection={<IconComponent size={12} />}
-      style={{ overflow: 'visible' }}
+      // The label may otherwise shrink to an ellipsis when the details column is wide.
+      styles={{ root: { overflow: 'visible' }, label: { overflow: 'visible' } }}
     >
       {t(`enums.auditOutcome.${outcome}`)}
     </Badge>

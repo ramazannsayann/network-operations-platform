@@ -570,6 +570,8 @@
       "enable": "İki adımlı doğrulamayı aç",
       "disable": "İki adımlı doğrulamayı kapat",
       "disableBody": "Kapatmak için parolanız ve bir doğrulama veya kurtarma kodu gerekir.",
+      "reset": "Yeniden kur (ör. yeni telefon)",
+      "resetBody": "Mevcut kurulum kaldırılır ve hemen yeniden kurarsınız (ör. yeni bir telefona geçerken). Bunun için parolanız ve bir doğrulama veya kurtarma kodu gerekir.",
       "codeOrRecovery": "Doğrulama kodu veya kurtarma kodu",
       "codesOnce": "Bu kurtarma kodları yalnızca şimdi gösterilir. Telefonunuza erişemezseniz her biri bir kez oturum açmanızı sağlar; güvenli bir yerde saklayın.",
       "copied": "Kopyalandı",
