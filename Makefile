@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/docker-compose.yml
 .DEFAULT_GOAL := help
 .PHONY: help install env up down logs ps migrate test test-integration test-scale lint format openapi mock \
 	fakelab-compose fakelab-up fakelab-seed fakelab-discover fakelab-accuracy fakelab-down \
-	fakelab-change fakelab-reset fakelab-backup fakelab-fixtures
+	fakelab-change fakelab-reset fakelab-backup fakelab-fixtures fakelab-users fakelab-mfa-reset
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -100,6 +100,25 @@ fakelab-up: env ## Start the stack plus the fake lab's devices (worker joins 10.
 	  echo "FAKELAB_PASSWORD=$$(openssl rand -hex 16)" >> deploy/.env; \
 	  echo "Added a random FAKELAB_PASSWORD to deploy/.env."; }
 	$(COMPOSE_FAKELAB) up --build --detach --wait
+
+# UI users of the fake lab, one per role, all with FAKELAB_UI_PASSWORD (random, in
+# deploy/.env). Admins and operators set up MFA at their first sign-in.
+fakelab-users: ## Create the UI users fakelab-admin, fakelab-operator, fakelab-viewer
+	@grep -q '^FAKELAB_UI_PASSWORD=' deploy/.env || { \
+	  echo "FAKELAB_UI_PASSWORD=ui-$$(openssl rand -hex 12)" >> deploy/.env; \
+	  echo "Added a random FAKELAB_UI_PASSWORD to deploy/.env."; }
+	@set -a && . ./deploy/.env && set +a && \
+	for user in fakelab-admin:admin fakelab-operator:operator fakelab-viewer:viewer; do \
+	  name=$${user%%:*}; role=$${user##*:}; \
+	  printf '%s\n' "$$FAKELAB_UI_PASSWORD" | $(COMPOSE_FAKELAB) exec -T api netops users create \
+	    $$name --role $$role --no-temporary --password-stdin 2>/dev/null || \
+	  printf '%s\n' "$$FAKELAB_UI_PASSWORD" | $(COMPOSE_FAKELAB) exec -T api netops users \
+	    set-password $$name --no-temporary --password-stdin; \
+	done
+
+USERNAME ?= fakelab-admin
+fakelab-mfa-reset: ## Remove a fake lab UI user's MFA (USERNAME=fakelab-admin); enrolls again
+	$(COMPOSE_FAKELAB) exec -T api netops users reset-mfa $(USERNAME)
 
 # Two profiles: an outdated one (random password no device accepts) and the lab's, so
 # discovery shows the two-attempt login and remembers the profile that worked.
