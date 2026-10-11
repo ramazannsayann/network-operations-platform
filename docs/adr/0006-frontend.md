@@ -23,7 +23,8 @@ tested.
 | Components | **Mantine** (core + hooks) | See below. |
 | Graph | **Cytoscape.js** | Built for network graphs: thousands of nodes on canvas, per-element classes and a CSS-like stylesheet (shape by device type, border by status), preset positions for our own role layout and saved layouts, headless mode for tests. Alternatives: vis-network (less control over styling, unmaintained periods), React Flow (DOM nodes; heavy beyond a few hundred nodes, built for node editors), D3 (everything by hand). |
 | Translations | i18next + react-i18next | ICU-style interpolation and Turkish/English plural rules; resources are plain JSON a teammate can edit. |
-| Icons | Tabler icons | Mantine's companion icon set; tree-shaken per icon. |
+| Icons | Tabler icons | Mantine's companion icon set; tree-shaken per icon. The map draws the same icons from their SVG sources (`@tabler/icons`). |
+| Dates | `@mantine/dates` + dayjs | Locale-aware date-time picker matching the component library. |
 
 **Why Mantine.** We need dense, accessible building blocks (tables, multi-selects, tags
 inputs, drawers, an app shell) with a dark theme, and we are four students with one
@@ -70,13 +71,48 @@ follows the page language and Turkish turns "switch" into "SWİTCH".
 ### The map
 
 - Node positions come from our own layout (`layoutByRole`): rows by role (out of scope,
-  edge, core, distribution, access, endpoints/APs), each row ordered by the average position
-  of its neighbours above; on L3 the subnets sit between or below their members.
-  Positions an operator saved (`PUT /topology/layout`) override it per node.
-- Status is never colour alone: border style (solid, dashed, double, dotted) and a second
-  caption line carry it, shapes carry the device type, and a legend explains both.
+  edge, core, distribution, access, endpoints/APs), evenly spaced by order. Each node is
+  placed under the average position of its neighbours above, then a row is spread to a
+  minimum gap (`spread`: groups centred on their spot, pushed apart both ways and averaged,
+  so nothing drifts). The column gap follows the canvas's aspect ratio, and the map is fitted
+  with padding (zoom capped for small graphs) on load and on every layer switch. Positions
+  an operator saved (`PUT /topology/layout`) override it per node.
+- Each device type has its own shape **and** a generic Tabler outline icon inside it
+  (router, L3 switch, switch, AP, firewall, WLC, unknown; subnet). No vendor icon artwork
+  or logos. Captions sit on an opaque background in the canvas colour, above the edges, in
+  both themes.
+- L3: edges carry no text. Style says the role: thick solid green for the active HSRP
+  gateway, dashed green for standby, thin grey for plain membership (all in the legend).
+  The gateway is in the subnet's caption ("10.10.10.0/24 · GW .1 (core1)"); HSRP states per
+  device are in the hover tooltip and the side panel. Subnets sit under their active
+  gateway, management subnets (the API's `management_subnet`) in a row of their own that a
+  switch hides.
+- Hover tooltips (HTML, not canvas labels) show ports, EtherChannel members and HSRP states.
+- Status is never colour alone: border style (solid, dashed, double) and a second caption
+  line carry it, and a legend explains shapes, states and link styles.
 - The canvas is not keyboard accessible by nature; the search box (a combobox of all nodes)
   and the side panel give keyboard users the same information.
+
+### Status presentation
+
+- Warning and error colours are for real problems only: `auth_failed` (red) and
+  `unreachable` (orange). Tests check that no other status uses them.
+- Devices discovery deliberately does not log in to (`unsupported_platform`: APs, phones,
+  other endpoints seen only via CDP/LLDP) are shown as **"Uç cihaz (CDP ile görüldü)"** /
+  "Endpoint (seen via CDP)" in a neutral grey, on the map, in the device list and detail,
+  and in discovery results ("Uç cihaz (bağlanılmadı)"). Only the presentation changed: the
+  stored value stays `unsupported_platform`, which states the machine fact (discovery does
+  not log in to this platform). A separate "endpoint" value would repeat what `device_type`
+  already says, and M3 may manage some of these devices another way (SNMP, a WLC), which a
+  presentation can follow without a data migration.
+- Normal discovery outcomes (duplicate addresses, out-of-scope neighbours) are not red.
+
+### Time travel
+
+The map's time selector is Mantine's `DateTimePicker` (`@mantine/dates`, dayjs) in the UI
+language: `DD.MM.YYYY HH:mm`, 24 h and Monday first in Turkish, with presets (Şimdi, 15 dk
+önce, 1 saat önce, Dün bu saat). While a past time is selected, a banner says so
+("Geçmiş görünüm: …") with a button back to now.
 
 ### Accessibility basics
 
