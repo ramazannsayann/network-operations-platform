@@ -314,6 +314,23 @@ class SnmpPrivProtocol(StrEnum):
     AES256 = "aes256"
 
 
+# --- Security (M7) --------------------------------------------------------------------------
+
+
+class UserRole(StrEnum):
+    """Proposal 7.7: Admin / Operator / Read-only (permissions: netops.auth.rbac)."""
+
+    ADMIN = "admin"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
+
+
+class AuditOutcome(StrEnum):
+    SUCCESS = "success"
+    DENIED = "denied"  # not allowed (missing permission, rate limit)
+    FAILED = "failed"  # attempted and rejected (wrong password, bad code, token reuse)
+
+
 ALL_ENUMS: tuple[type[StrEnum], ...] = (
     DeviceType,
     DeviceRole,
@@ -349,6 +366,8 @@ ALL_ENUMS: tuple[type[StrEnum], ...] = (
     CredentialKind,
     SnmpAuthProtocol,
     SnmpPrivProtocol,
+    UserRole,
+    AuditOutcome,
 )
 
 
