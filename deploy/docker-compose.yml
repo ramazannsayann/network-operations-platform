@@ -32,6 +32,10 @@ x-backend: &backend
     REDIS_URL: redis://redis:6379/0
     CELERY_BROKER_URL: redis://redis:6379/1
     CELERY_RESULT_BACKEND: redis://redis:6379/2
+    # Configuration management (ADR-0007).
+    CONFIG_BACKUP_SCHEDULE: ${CONFIG_BACKUP_SCHEDULE:-30 2 * * *}
+    CONFIG_CHANGE_DEBOUNCE_SECONDS: ${CONFIG_CHANGE_DEBOUNCE_SECONDS:-30}
+    PLATFORM_WRITE_USERNAME: ${PLATFORM_WRITE_USERNAME:-}
   depends_on:
     db:
       condition: service_healthy
@@ -91,6 +95,9 @@ services:
     <<: *backend
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    volumes:
+      # Reads versions (and redacts them); never writes.
+      - config-repo:/var/lib/netops/configs:ro
     healthcheck:
       test:
         - CMD
@@ -109,6 +116,10 @@ services:
       - --app=netops.workers.celery_app:celery_app
       - worker
       - --concurrency=${CELERY_CONCURRENCY:-2}
+    volumes:
+      # The configuration repository: a local Git repository with complete configurations
+      # (secrets included), never pushed anywhere. Back up this volume (ADR-0007).
+      - config-repo:/var/lib/netops/configs
     healthcheck:
       test:
         - CMD-SHELL
@@ -125,6 +136,20 @@ services:
       - --app=netops.workers.celery_app:celery_app
       - beat
       - --schedule=/tmp/celerybeat-schedule
+
+  # Syslog receiver (M3 events, M4 change detection): UDP 514 inside the container.
+  # Devices must reach it with their own source address: on a Linux production host use
+  # host networking (see docs/adr/0007-config-management.md); Docker Desktop rewrites the
+  # source of UDP from outside to its gateway, so there it only suits the fake lab, whose
+  # devices share a Docker network with it.
+  events:
+    <<: *backend
+    command: ["python", "-m", "netops.events"]
+    ports:
+      - "${SYSLOG_BIND:-127.0.0.1}:${SYSLOG_HOST_PORT:-5514}:514/udp"
+    # Port 514 without root inside the container.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
 
   web:
     build:
@@ -149,3 +174,4 @@ services:
 
 volumes:
   db-data:
+  config-repo:
