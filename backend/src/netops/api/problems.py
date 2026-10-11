@@ -19,6 +19,11 @@ PROBLEM_MEDIA_TYPE = "application/problem+json"
 NOT_IMPLEMENTED = "urn:netops:problem:not-implemented"
 VALIDATION_ERROR = "urn:netops:problem:validation-error"
 JOB_FAILED = "urn:netops:problem:job-failed"
+FORBIDDEN = "urn:netops:problem:forbidden"
+MFA_ENROLLMENT_REQUIRED = "urn:netops:problem:mfa-enrollment-required"
+PASSWORD_CHANGE_REQUIRED = "urn:netops:problem:password-change-required"  # noqa: S105 - a problem type, not a password
+RATE_LIMITED = "urn:netops:problem:rate-limited"
+WEAK_PASSWORD = "urn:netops:problem:weak-password"  # noqa: S105 - a problem type
 
 
 VALIDATION_ISSUE_EXAMPLE: dict[str, Any] = {
@@ -68,12 +73,20 @@ class ProblemError(Exception):
     """Raise to answer with a problem details response."""
 
     def __init__(
-        self, status: int, *, detail: str | None = None, type_: str = "about:blank"
+        self,
+        status: int,
+        *,
+        detail: str | None = None,
+        type_: str = "about:blank",
+        errors: list[ValidationIssue] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(detail or HTTPStatus(status).phrase)
         self.status = status
         self.detail = detail
         self.type = type_
+        self.errors = errors
+        self.headers = headers
 
 
 def not_implemented() -> ProblemError:
@@ -113,7 +126,14 @@ def problem_response(
 # Starlette types handlers as (Request, Exception); each is only registered for its own type.
 async def _problem_error(request: Request, exc: Exception) -> JSONResponse:
     error = cast("ProblemError", exc)
-    return problem_response(request, error.status, detail=error.detail, type_=error.type)
+    return problem_response(
+        request,
+        error.status,
+        detail=error.detail,
+        type_=error.type,
+        errors=error.errors,
+        headers=error.headers,
+    )
 
 
 async def _http_error(request: Request, exc: Exception) -> JSONResponse:
@@ -151,10 +171,13 @@ def install_problem_handlers(app: FastAPI) -> None:
 
 _DESCRIPTIONS = {
     400: "Bad request",
-    401: "Missing or invalid bearer token",
+    401: "Missing, invalid or expired bearer token, or failed sign-in",
+    403: "The user's role lacks the permission, or the session must first change its "
+    "password or enroll in MFA",
     404: "The resource does not exist",
     409: "Conflicts with the current state of the resource",
     422: "Validation error (see the `errors` member)",
+    429: "Too many attempts from this address; see Retry-After",
     501: "Part of the contract, not implemented yet",
     503: "A backing store (e.g. the configuration repository) is unavailable",
 }

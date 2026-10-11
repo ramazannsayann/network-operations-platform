@@ -9,8 +9,10 @@ from fastapi.routing import APIRoute
 
 from netops import __version__
 from netops.api.problems import (
+    FORBIDDEN,
     NOT_IMPLEMENTED,
     PROBLEM_MEDIA_TYPE,
+    RATE_LIMITED,
     VALIDATION_ERROR,
     VALIDATION_ISSUE_EXAMPLE,
     install_problem_handlers,
@@ -27,7 +29,13 @@ Endpoints that return **501 Not Implemented** are part of the contract but not b
 
 TAGS: list[dict[str, Any]] = [
     {"name": "health", "description": "Liveness of the API and its dependencies."},
-    {"name": "auth", "description": "Login and the current user (M7; contract only)."},
+    {
+        "name": "auth",
+        "description": "Sign-in (password, TOTP), sessions, the signed-in user's account (M7).",
+    },
+    {"name": "users", "description": "User administration (M7, admin)."},
+    {"name": "credentials", "description": "Device credential profiles (M7)."},
+    {"name": "audit", "description": "The append-only audit log (M7, admin)."},
     {"name": "locations", "description": "Campus, building and floor hierarchy (M2)."},
     {"name": "devices", "description": "Inventory: devices and interfaces (M1/M2)."},
     {"name": "discovery", "description": "CDP/LLDP discovery runs (M1)."},
@@ -47,9 +55,11 @@ _SCHEMA_PREFIX = "#/components/schemas/"
 
 _PROBLEM_DETAILS = {
     401: "A valid bearer token is required.",
+    403: "Your role (viewer) does not have the permission devices:refresh.",
     404: "The requested resource does not exist.",
     409: "The request conflicts with the current state of the resource.",
     422: "The request is invalid; see errors.",
+    429: "Too many attempts from this address; try again in 120 s.",
     501: "This endpoint is part of the API contract but is not implemented yet.",
 }
 
@@ -78,6 +88,10 @@ def _problem_example(status: int) -> dict[str, Any]:
     example: dict[str, Any] = {"type": "about:blank", "title": HTTPStatus(status).phrase}
     if status == HTTPStatus.NOT_IMPLEMENTED:
         example["type"] = NOT_IMPLEMENTED
+    if status == HTTPStatus.FORBIDDEN:
+        example["type"] = FORBIDDEN
+    if status == HTTPStatus.TOO_MANY_REQUESTS:
+        example["type"] = RATE_LIMITED
     if status == HTTPStatus.UNPROCESSABLE_ENTITY:
         example["type"] = VALIDATION_ERROR
         example["errors"] = [VALIDATION_ISSUE_EXAMPLE]

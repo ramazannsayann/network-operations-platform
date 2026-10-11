@@ -27,8 +27,9 @@ from netops.api.schemas.configs import (
     ConfigVersionContent,
     ConfigVersionPage,
 )
-from netops.api.security import AUTHENTICATED
+from netops.api.security import guard
 from netops.api.v1.common import DEFAULT_LIMIT, From, Limit, Offset, SearchText, Session, To
+from netops.auth.rbac import Permission
 from netops.configmgmt.diff import redacted_diff
 from netops.configmgmt.redact import redact, redact_commands
 from netops.configmgmt.store import ConfigStore, ConfigStoreError
@@ -36,7 +37,7 @@ from netops.core.settings import get_settings
 from netops.db import models as m
 from netops.db.enums import ChangeOrigin, CollectionKind, CollectionStatus
 
-router = APIRouter(tags=["configs"], dependencies=AUTHENTICATED, responses=problems(401, 422, 501))
+router = APIRouter(tags=["configs"], responses=problems(401, 403, 422, 501))
 
 VersionSort = Literal["collected_at", "-collected_at"]
 ChangeSort = Literal["detected_at", "-detected_at"]
@@ -92,7 +93,7 @@ def _range(column: Any, from_: datetime | None, to: datetime | None) -> list[Col
     return conditions
 
 
-@router.get("/config-backups")
+@router.get("/config-backups", **guard(Permission.CONFIGS_READ))
 async def list_config_backups(
     session: Session,
     q: SearchText = None,
@@ -198,7 +199,9 @@ async def list_config_backups(
     return ConfigBackupSummaryPage(items=items, total=total or 0, limit=limit, offset=offset)
 
 
-@router.get("/devices/{device_id}/configs", responses=problems(404))
+@router.get(
+    "/devices/{device_id}/configs", responses=problems(404), **guard(Permission.CONFIGS_READ)
+)
 async def list_device_configs(
     session: Session,
     device_id: UUID,
@@ -236,7 +239,7 @@ def _label(device: m.Device, version: m.ConfigVersion) -> str:
 
 
 # Declared before /configs/{version_id} so "diff" is not taken for a version id.
-@router.get("/configs/diff", responses=problems(404, 503))
+@router.get("/configs/diff", responses=problems(404, 503), **guard(Permission.CONFIGS_READ))
 async def diff_configs(
     session: Session,
     from_: Annotated[UUID, Query(alias="from", description="Older version id.")],
@@ -265,7 +268,7 @@ async def diff_configs(
     )
 
 
-@router.get("/configs/{version_id}", responses=problems(404, 503))
+@router.get("/configs/{version_id}", responses=problems(404, 503), **guard(Permission.CONFIGS_READ))
 async def get_config_version(session: Session, version_id: UUID) -> ConfigVersionContent:
     """A configuration version with its normalized text, secrets redacted."""
     version = await _version_row(session, version_id)
@@ -275,7 +278,7 @@ async def get_config_version(session: Session, version_id: UUID) -> ConfigVersio
     )
 
 
-@router.get("/config-changes")
+@router.get("/config-changes", **guard(Permission.CONFIGS_READ))
 async def list_config_changes(
     session: Session,
     device_id: UUID | None = None,

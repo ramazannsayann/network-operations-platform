@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import ColumnElement, Select, func, or_, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from netops.api.problems import ProblemError, not_implemented, problems
+from netops.api.problems import FORBIDDEN, ProblemError, not_implemented, problems
 from netops.api.schemas.common import JobRef, LocationRef
 from netops.api.schemas.devices import (
     CollectionFreshness,
@@ -25,7 +25,7 @@ from netops.api.schemas.devices import (
     InterfaceState,
     InterfaceSummary,
 )
-from netops.api.security import AUTHENTICATED
+from netops.api.security import CurrentPrincipal, audit_denied, guard
 from netops.api.v1.common import (
     ACCEPTED,
     DEFAULT_LIMIT,
@@ -36,9 +36,12 @@ from netops.api.v1.common import (
     SearchText,
     Session,
 )
+from netops.auth import audit
+from netops.auth.rbac import Permission
 from netops.db import models as m
 from netops.db.enums import (
     AlarmState,
+    AuditOutcome,
     CollectionKind,
     CollectionStatus,
     CollectionTrigger,
@@ -52,7 +55,7 @@ from netops.db.enums import (
 from netops.db.state import observations_of, run_at
 from netops.workers.jobs import new_job
 
-router = APIRouter(tags=["devices"], dependencies=AUTHENTICATED, responses=problems(401, 422, 501))
+router = APIRouter(tags=["devices"], responses=problems(401, 403, 422, 501))
 
 DeviceSort = Literal[
     "hostname", "-hostname", "mgmt_ip", "-mgmt_ip", "last_seen_at", "-last_seen_at"
@@ -135,7 +138,7 @@ _SUMMARY_COLUMNS = (
 )
 
 
-@router.get("/devices")
+@router.get("/devices", **guard(Permission.DEVICES_READ))
 async def list_devices(
     session: Session,
     device_type: Annotated[list[DeviceType] | None, Query()] = None,
@@ -190,7 +193,7 @@ async def _device(session: AsyncSession, device_id: UUID) -> m.Device:
     return device
 
 
-@router.get("/devices/{device_id}", responses=problems(404))
+@router.get("/devices/{device_id}", responses=problems(404), **guard(Permission.DEVICES_READ))
 async def get_device(session: Session, device_id: UUID) -> Device:
     device = await _device(session, device_id)
     (summary,) = await _summaries(session, [device])
@@ -245,15 +248,29 @@ async def _freshness(session: AsyncSession, device_id: UUID) -> list[CollectionF
     "/devices/{device_id}/refresh",
     status_code=status.HTTP_202_ACCEPTED,
     responses=ACCEPTED | problems(404, 409),
+    **guard(Permission.DEVICES_REFRESH),
 )
 async def refresh_device(
     session: Session,
     enqueue: Enqueue,
     response: Response,
     device_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
     body: DeviceRefreshRequest | None = None,
 ) -> JobRef:
-    """Collect the device's state now ("refresh now"). 409 if it is not managed."""
+    """Collect the device's state now ("refresh now"). 409 if it is not managed.
+    Collecting ``config`` (a configuration backup) also needs ``configs:backup``."""
+    kinds = [k.value for k in body.kinds] if body and body.kinds else None
+    backup = kinds is not None and CollectionKind.CONFIG.value in kinds
+    if backup and Permission.CONFIGS_BACKUP not in principal.permissions:
+        await audit_denied(principal, request, Permission.CONFIGS_BACKUP, "missing_permission")
+        raise ProblemError(
+            status.HTTP_403_FORBIDDEN,
+            detail=f"Your role ({principal.role.value}) does not have the permission "
+            f"{Permission.CONFIGS_BACKUP.value}.",
+            type_=FORBIDDEN,
+        )
     device = await _device(session, device_id)
     if not device.is_managed:
         raise ProblemError(
@@ -262,8 +279,18 @@ async def refresh_device(
         )
     job = new_job(JobKind.DEVICE_REFRESH, device_id)
     session.add(job)
+    for action in ("device.refresh", "config.backup") if backup else ("device.refresh",):
+        audit.record(
+            session,
+            action,
+            AuditOutcome.SUCCESS,
+            actor_user_id=principal.user_id,
+            actor_ip=principal.ip,
+            target_type="device",
+            target_id=device_id,
+            details={"kinds": kinds or "default", "job_id": str(job.id)},
+        )
     await session.commit()
-    kinds = [k.value for k in body.kinds] if body and body.kinds else None
     enqueue(
         "netops.collect_device", str(device_id), kinds, CollectionTrigger.MANUAL.value, str(job.id)
     )
@@ -278,7 +305,9 @@ async def refresh_device(
     )
 
 
-@router.get("/devices/{device_id}/interfaces", responses=problems(404))
+@router.get(
+    "/devices/{device_id}/interfaces", responses=problems(404), **guard(Permission.DEVICES_READ)
+)
 async def list_device_interfaces(
     session: Session,
     device_id: UUID,
@@ -353,7 +382,7 @@ _STATE_COLUMNS = (
 )
 
 
-@router.get("/interfaces/{interface_id}", responses=problems(404))
+@router.get("/interfaces/{interface_id}", responses=problems(404), **guard(Permission.DEVICES_READ))
 async def get_interface(interface_id: UUID, at: At = None) -> InterfaceDetail:
     """One interface: addresses, link peer, port-channel members and its state at ``at``."""
     raise not_implemented()

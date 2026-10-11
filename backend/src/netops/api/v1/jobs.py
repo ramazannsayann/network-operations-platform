@@ -7,14 +7,13 @@ from fastapi import APIRouter
 
 from netops.api.problems import JOB_FAILED, Problem, ProblemError, problems
 from netops.api.schemas.common import Job, JobProgress
-from netops.api.security import AUTHENTICATED
+from netops.api.security import guard
 from netops.api.v1.common import Session
+from netops.auth.rbac import Permission
 from netops.db import models as m
 from netops.db.enums import JobKind, JobStatus
 
-router = APIRouter(
-    prefix="/jobs", tags=["jobs"], dependencies=AUTHENTICATED, responses=problems(401, 422, 501)
-)
+router = APIRouter(prefix="/jobs", tags=["jobs"], responses=problems(401, 403, 422, 501))
 
 _TARGETS = {
     JobKind.DEVICE_REFRESH: "/api/v1/devices/{}",
@@ -22,7 +21,7 @@ _TARGETS = {
 }
 
 
-@router.get("/{job_id}", responses=problems(404))
+@router.get("/{job_id}", responses=problems(404), **guard(Permission.JOBS_READ))
 async def get_job(session: Session, job_id: UUID) -> Job:
     job = await session.get(m.Job, job_id)
     if job is None:

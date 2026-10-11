@@ -8,18 +8,19 @@ from fastapi import APIRouter, Query
 from netops.api.problems import not_implemented, problems
 from netops.api.schemas.alarms import Alarm, AlarmAcknowledge, AlarmPage, Incident, IncidentPage
 from netops.api.schemas.findings import FindingPage
-from netops.api.security import AUTHENTICATED
+from netops.api.security import guard
 from netops.api.v1.common import DEFAULT_LIMIT, From, Limit, Offset, To
+from netops.auth.rbac import Permission
 from netops.db.enums import AlarmState, IncidentState, Severity
 
-router = APIRouter(dependencies=AUTHENTICATED, responses=problems(401, 422, 501))
+router = APIRouter(responses=problems(401, 403, 422, 501))
 
 AlarmSort = Literal["opened_at", "-opened_at", "last_occurrence_at", "-last_occurrence_at"]
 IncidentSort = Literal["opened_at", "-opened_at"]
 FindingSort = Literal["score", "-score", "created_at", "-created_at"]
 
 
-@router.get("/alarms", tags=["alarms"])
+@router.get("/alarms", tags=["alarms"], **guard(Permission.ALARMS_READ))
 async def list_alarms(
     state: Annotated[list[AlarmState] | None, Query()] = None,
     severity: Annotated[list[Severity] | None, Query()] = None,
@@ -35,18 +36,25 @@ async def list_alarms(
     raise not_implemented()
 
 
-@router.get("/alarms/{alarm_id}", tags=["alarms"], responses=problems(404))
+@router.get(
+    "/alarms/{alarm_id}", tags=["alarms"], responses=problems(404), **guard(Permission.ALARMS_READ)
+)
 async def get_alarm(alarm_id: UUID) -> Alarm:
     raise not_implemented()
 
 
-@router.post("/alarms/{alarm_id}/acknowledge", tags=["alarms"], responses=problems(404, 409))
+@router.post(
+    "/alarms/{alarm_id}/acknowledge",
+    tags=["alarms"],
+    responses=problems(404, 409),
+    **guard(Permission.ALARMS_ACK),
+)
 async def acknowledge_alarm(alarm_id: UUID, body: AlarmAcknowledge | None = None) -> Alarm:
     """Acknowledge an open alarm as the calling user. 409 if it is already cleared."""
     raise not_implemented()
 
 
-@router.get("/incidents", tags=["incidents"])
+@router.get("/incidents", tags=["incidents"], **guard(Permission.ALARMS_READ))
 async def list_incidents(
     state: Annotated[list[IncidentState] | None, Query()] = None,
     from_: From = None,
@@ -59,13 +67,18 @@ async def list_incidents(
     raise not_implemented()
 
 
-@router.get("/incidents/{incident_id}", tags=["incidents"], responses=problems(404))
+@router.get(
+    "/incidents/{incident_id}",
+    tags=["incidents"],
+    responses=problems(404),
+    **guard(Permission.ALARMS_READ),
+)
 async def get_incident(incident_id: UUID) -> Incident:
     """An incident with its alarms, ranked root-cause candidates and related config changes."""
     raise not_implemented()
 
 
-@router.get("/findings", tags=["findings"])
+@router.get("/findings", tags=["findings"], **guard(Permission.ALARMS_READ))
 async def list_findings(
     incident_id: UUID | None = None,
     device_id: UUID | None = None,

@@ -8,21 +8,21 @@ from sqlalchemy import func, select
 
 from netops.api.problems import not_implemented, problems
 from netops.api.schemas.locations import Location, LocationCreate, LocationPage, LocationUpdate
-from netops.api.security import AUTHENTICATED
+from netops.api.security import guard
 from netops.api.v1.common import DEFAULT_LIMIT, Limit, Offset, SearchText, Session
+from netops.auth.rbac import Permission
 from netops.db import models as m
 
 router = APIRouter(
     prefix="/locations",
     tags=["locations"],
-    dependencies=AUTHENTICATED,
-    responses=problems(401, 422, 501),
+    responses=problems(401, 403, 422, 501),
 )
 
 LocationSort = Literal["name", "-name", "path", "-path"]
 
 
-@router.get("")
+@router.get("", **guard(Permission.LOCATIONS_READ))
 async def list_locations(
     session: Session,
     parent_id: UUID | None = None,
@@ -74,18 +74,23 @@ async def list_locations(
     )
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, responses=problems(409))
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    responses=problems(409),
+    **guard(Permission.LOCATIONS_MANAGE),
+)
 async def create_location(body: LocationCreate) -> Location:
     """Create a location. 409 if the name already exists under the same parent."""
     raise not_implemented()
 
 
-@router.get("/{location_id}", responses=problems(404))
+@router.get("/{location_id}", responses=problems(404), **guard(Permission.LOCATIONS_READ))
 async def get_location(location_id: UUID) -> Location:
     raise not_implemented()
 
 
-@router.patch("/{location_id}", responses=problems(404, 409))
+@router.patch("/{location_id}", responses=problems(404, 409), **guard(Permission.LOCATIONS_MANAGE))
 async def update_location(location_id: UUID, body: LocationUpdate) -> Location:
     """Partial update: only fields present in the body change."""
     raise not_implemented()
@@ -96,6 +101,7 @@ async def update_location(location_id: UUID, body: LocationUpdate) -> Location:
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
     responses=problems(404, 409),
+    **guard(Permission.LOCATIONS_MANAGE),
 )
 async def delete_location(location_id: UUID) -> None:
     """Delete a location. 409 while it still has child locations."""

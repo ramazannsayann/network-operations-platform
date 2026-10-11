@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from netops.api.v1 import (
     alarms,
+    audit,
     auth,
     configs,
     credentials,
@@ -15,6 +16,7 @@ from netops.api.v1 import (
     locations,
     monitoring,
     topology,
+    users,
 )
 
 router = APIRouter(prefix="/v1")
@@ -31,5 +33,7 @@ for module in (
     configs,
     jobs,
     credentials,
+    users,
+    audit,
 ):
     router.include_router(module.router)
