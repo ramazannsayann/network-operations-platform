@@ -12,7 +12,8 @@ something changed, so they never have to poll. Conventions are those of
 - One connection per browser tab. Messages are JSON text frames.
 - Authentication: the first client message must be `auth` with the bearer token from
   `POST /api/v1/auth/login` (browsers cannot set an `Authorization` header on WebSockets,
-  and tokens in URLs end up in logs). Until M7 the token is not checked.
+  and tokens in URLs end up in logs). When the channel is built, it checks the token
+  like every REST route does (ADR-0008).
 - Keep-alive: the server sends a WebSocket ping frame every 30 s; clients that miss two
   are disconnected. Clients reconnect with exponential backoff (1 s, 2 s, 4 s ... max 30 s).
 

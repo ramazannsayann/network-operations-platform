@@ -9,9 +9,11 @@ Design reference: the project proposal,
 > Status: discovery (M1), inventory collection (M2) and configuration management (M4:
 > backups in a local Git repository, redacted diffs, changes made outside the platform
 > detected from syslog) work against a fake lab, with UI screens for the topology map,
-> devices, discovery, configurations, changes and syslog events. Monitoring and alarms,
-> central configuration, diagnosis and authentication come next. The stack runs end to end
-> (UI → nginx → API → TimescaleDB and Redis, plus Celery workers and the syslog receiver).
+> devices, discovery, configurations, changes and syslog events. Every page and API call
+> needs a sign-in (M7: passwords and TOTP, roles, an append-only audit log, user and
+> credential administration). Monitoring and alarms, central configuration and diagnosis
+> come next. The stack runs end to end (UI → nginx → API → TimescaleDB and Redis, plus
+> Celery workers and the syslog receiver).
 
 ![Topology map of the fake lab](docs/screenshots/map-l2-light.png)
 
@@ -25,13 +27,22 @@ Node.js 24 (≥ 22.12 works).
 make up         # creates deploy/.env on first run, builds, migrates the database, starts all services
 ```
 
-`deploy/.env` gets a random database password and a random `CREDENTIALS_KEY`, which encrypts
-the device credentials stored in the database. Keep a copy of that key outside the database
-backups ([ADR-0004](docs/adr/0004-credentials-and-device-access.md)).
+`deploy/.env` gets a random database password, a random `CREDENTIALS_KEY`, which encrypts
+the device credentials and MFA secrets stored in the database (keep a copy of it outside
+the database backups, [ADR-0004](docs/adr/0004-credentials-and-device-access.md)), and a
+random `AUTH_SIGNING_KEY`, which signs the access tokens.
+
+There is no default account. Create the first admin on the server; it asks for a username
+and a password (at least 12 characters, not a common one) without echoing them:
+
+```bash
+docker compose -f deploy/docker-compose.yml exec api netops users create-admin
+```
 
 Then open:
 
-- UI: <http://localhost:8080> (shows database and Redis status)
+- UI: <http://localhost:8080>; sign in, then set up MFA with an authenticator app (required
+  for admins and operators) and keep the ten recovery codes
 - API docs: <http://localhost:8080/api/docs>
 - Health: `curl http://localhost:8080/api/health`
   → `{"status":"ok","version":"0.1.0","db":"ok","redis":"ok"}` (HTTP 503 if a dependency is down)
@@ -60,7 +71,7 @@ Run parts of the stack outside Docker:
 ```bash
 # Backend on the host, against the db and redis containers
 docker compose -f deploy/docker-compose.yml up -d db redis
-cp backend/.env.example backend/.env    # then copy POSTGRES_PASSWORD from deploy/.env
+cp backend/.env.example backend/.env    # then copy POSTGRES_PASSWORD and the keys from deploy/.env
 cd backend && uv run uvicorn netops.main:app --reload
 
 # Frontend dev server with hot reload; proxies /api and /ws to localhost:8000
@@ -74,10 +85,13 @@ New migration: `cd backend && uv run alembic revision --autogenerate -m "add dev
 The REST API is defined contract-first: [docs/api/openapi.json](docs/api/openapi.json)
 (browsable at <http://localhost:8080/api/docs> when the stack runs), conventions in
 [ADR-0003](docs/adr/0003-api-conventions.md), live updates in
-[docs/api/websocket.md](docs/api/websocket.md). Devices, discovery runs, jobs, topology
-(with its layout and changes), credential profiles (names only) and the location list are
-implemented, as are configuration backups, versions, diffs and changes and the event
-list; the other endpoints still answer `501 Not Implemented`.
+[docs/api/websocket.md](docs/api/websocket.md). Sign-in and sessions, users, credential
+profiles, the audit log, devices, discovery runs, jobs, topology (with its layout and
+changes) and the location list are implemented, as are configuration backups, versions,
+diffs and changes and the event list; the other endpoints still answer
+`501 Not Implemented`. Every endpoint except health, sign-in, MFA verification and token
+refresh needs a bearer token and names the permission it requires
+(`x-required-permission` in the contract).
 
 After changing schemas or routers in `backend/src/netops/api/`, regenerate and commit the
 document and the frontend types (CI fails if they are stale):
@@ -94,14 +108,18 @@ cd frontend && npm run mock       # Prism on http://127.0.0.1:4010
 cd frontend && npm run dev:mock   # UI on http://localhost:5173, /api proxied to the mock
 ```
 
-The mock enforces the declared security: send any `Authorization: Bearer <token>` header
-(tokens are not checked yet). Other responses can be requested with a `Prefer` header,
-e.g. `Prefer: code=404` or `Prefer: example=not_found` on `/api/v1/hosts/locate`.
+The mock enforces the declared security: it wants an `Authorization: Bearer <token>`
+header but accepts any token. It answers the UI's token refresh with the contract's example,
+so the UI opens signed in as the example operator. Other responses can be requested with a
+`Prefer` header, e.g. `Prefer: code=404` or `Prefer: example=not_found` on
+`/api/v1/hosts/locate`.
 
 ## User interface
 
 <http://localhost:8080> after `make up` (Turkish by default; EN in the header switches the
-language, the theme follows the system or the header menu):
+language, the theme follows the system or the header menu). The menu shows what the user's
+role may see, and buttons a role may not use (collect now, back up, start a discovery,
+save the layout) are hidden:
 
 - **Harita** (map): the topology by role, L2 (physical links, EtherChannels as one thick
   edge) or L3 (subnets, HSRP gateways); search, role/location filters, a time selector for
@@ -117,6 +135,11 @@ language, the theme follows the system or the header menu):
 - **Config değişiklikleri**: every detected change with the "Platform dışı değişiklik"
   badge, user, source address and commands; filter by device, origin, user and time.
 - **Olaylar** (events): syslog from the devices, filtered by device, severity and mnemonic.
+- **Profilim** (account menu): change the password, turn MFA on or off, see and end your
+  sessions.
+- **Yönetim** (admins only): **Kullanıcılar** (create users, change roles, deactivate,
+  reset MFA or the password, unlock), **Kimlik profilleri** (credential profiles; secret
+  fields are write-only) and **Denetim kaydı** (the audit log, filterable).
 
 Screenshots (fake lab, light and dark) are in [docs/screenshots/](docs/screenshots/).
 Frontend tests: `cd frontend && npm test` (Vitest) and `npm run e2e` (Playwright against the
@@ -132,6 +155,7 @@ containers next to the stack, so discovery can be tried without real equipment:
 ```bash
 make fakelab-up         # the stack plus one container per fake device (10.255.0.0/24)
 make fakelab-seed       # two SSH credential profiles, created with the netops CLI
+make fakelab-users      # UI users fakelab-admin, -operator, -viewer (password in deploy/.env)
 make fakelab-discover   # discover from core1; prints what happened to every address
 make fakelab-accuracy   # device/link precision and recall against topology.yaml
 make fakelab-down       # stop everything; `make up` for the normal stack again
@@ -158,6 +182,23 @@ privilege 15 read account): [docs/device-prerequisites.md](docs/device-prerequis
 Security model and decisions: [ADR-0007](docs/adr/0007-config-management.md).
 
 ![Config tab: version timeline, redacted diff and change list](docs/screenshots/config-diff-split-light.png)
+
+## Users, roles and the audit log
+
+Three roles: **viewer** reads everything except credentials, users and the audit log;
+**operator** also starts discovery, collects and backs up devices and saves map layouts;
+**admin** also manages users and credential profiles and reads the audit log. Admins and
+operators must use MFA (TOTP; `AUTH_MFA_REQUIRED_ROLES`). Access tokens last 15 minutes and
+are renewed through an HttpOnly cookie; a session ends after 12 hours without use, after 7
+days at most, or when signed out. Accounts lock for a growing time after five failed
+attempts; sign-in is also rate-limited per address. Sign-ins, failures, lockouts, every
+change made through the platform and every refused request go to the audit log, which the
+database keeps append-only. Further users are created in Kullanıcılar or with
+`netops users create NAME --role operator` (a temporary password, to be changed at the
+first sign-in); `netops users --help` lists the rest (set a password, reset MFA, unlock).
+Decisions: [ADR-0008](docs/adr/0008-authentication.md).
+
+![Denetim kaydı: the audit log](docs/screenshots/admin-audit-light.png)
 
 ## Repository layout
 

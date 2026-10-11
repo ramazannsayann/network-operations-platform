@@ -17,10 +17,12 @@ credential profiles, the read-only SSH layer, parsers for 17 IOS/IOS-XE show com
 M2 collectors (`collect_device`), M1 discovery (BFS over CDP/LLDP, links, roles;
 `netops.discover`) and topology, M4 configuration backups (local Git repository,
 redaction, diffs, external change detection) with a syslog receiver (the `events`
-service), the device/discovery/job/topology/config/event endpoints, the `netops` operator
-CLI, the fake lab with its change simulator and the UI (shell, map, devices, discovery,
-config, config changes, events). Other endpoints still answer 501. No SNMP polling,
-alarms, compliance, M5 push or authentication yet.
+service), M7 security (users, argon2id passwords, TOTP MFA, JWT access tokens with
+rotating refresh cookies, RBAC on every route, the append-only audit log), the
+device/discovery/job/topology/config/event/user/credential/audit endpoints, the `netops`
+operator CLI, the fake lab with its change simulator and the UI (sign-in, shell, map,
+devices, discovery, config, config changes, events, profile, admin pages). Other endpoints
+still answer 501. No SNMP polling, alarms, compliance, M5 push or SSO yet.
 
 ## Architecture
 
@@ -46,7 +48,7 @@ commands.
 | M4 | Config management (backup, versioning, diff, compliance) | `backend/src/netops/configmgmt/` (normalize, parser, redact, diff, store, backup, changes; [ADR-0007](docs/adr/0007-config-management.md)) |
 | M5 | Central configuration (templated changes, dry-run, approval, rollback) | `backend/src/netops/configmgmt/` |
 | M6 | Fault diagnosis (alarm/topology/change correlation, root-cause hints) | `backend/src/netops/diagnosis/` |
-| M7 | Security (authentication, RBAC, credential vault, audit log) | credential profiles only: `db/models/credentials.py`, `core/crypto.py` |
+| M7 | Security (authentication, RBAC, credential vault, audit log) | `backend/src/netops/auth/` (passwords, tokens, totp, rbac, audit, ratelimit, service, users, credentials), `api/security.py`, `core/crypto.py` ([ADR-0008](docs/adr/0008-authentication.md)) |
 
 Shared backend packages: `api/` (routers), `core/` (settings, logging, Redis client,
 `ifname` interface-name normalizer, `secrets`/`crypto` for credentials), `db/` (models,
@@ -80,8 +82,10 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
 - Contract: `docs/api/openapi.json`, generated from the routers in `netops/api/v1/` and the
   Pydantic schemas in `netops/api/schemas/`. Conventions: [ADR-0003](docs/adr/0003-api-conventions.md)
   (`/api/v1`, problem+json errors, `{items,total,limit,offset}` lists, 202 + jobs, `at` for
-  time travel, enums reused from `netops.db.enums`, bearer auth declared on every endpoint
-  except health and login). WebSocket: `docs/api/websocket.md`.
+  time travel, enums reused from `netops.db.enums`, bearer auth on every endpoint except
+  health, login, MFA verification and refresh). WebSocket: `docs/api/websocket.md`.
+- Every route declares exactly one permission with `**guard(Permission.X)` (see
+  "Authentication and audit" below); `tests/test_rbac.py` fails for a route without one.
 - Unimplemented endpoints raise `not_implemented()` (501 problem). When implementing one,
   keep the contract (any contract change is reviewed as a diff of `openapi.json`), add it
   to `IMPLEMENTED_OPERATIONS` in `tests/test_api_contract.py` and test it against the
@@ -111,6 +115,27 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
   switching commands, L2 switches skip routing.
 - SSH sessions connect where `netops.netaccess.target` resolves the management address to
   (identity in production). Never use the resolved address for scope checks or storage.
+
+## Authentication and audit (ADR-0008)
+
+- Permissions and the role mapping live only in `netops.auth.rbac` (`Permission`,
+  `ROLE_PERMISSIONS`). A new route uses an existing permission or adds one there and to
+  the role matrix in `tests/test_rbac.py`. The UI hides what a role cannot do with
+  `useCan(...)` / `RequirePermission` (`frontend/src/auth/`); the API enforces it anyway.
+- Actions that change something are audited with `netops.auth.audit.record` in the same
+  transaction (`record_now` for failures that roll back). Details hold names, ids and
+  counts, never secrets; keys naming one (password, secret, token, code, key) are refused.
+  `audit_log` is append-only (database triggers); never add an UPDATE or DELETE path.
+- Auth logic (login, MFA, refresh rotation, lockout) is in `netops.auth.service`; routers
+  only translate it to HTTP. Every login failure returns the same 401 and message.
+- There are no default accounts: the first admin comes from `netops users create-admin`.
+  Never commit a usable password, TOTP secret or recovery code; tests that sign in
+  generate theirs at random.
+- Unit tests: the `client` fixture signs in as an operator (`principal(role)` in
+  `tests/conftest.py`), `anonymous_client` sends no token. Integration tests sign in for
+  real (`tests/integration/support.py`: `add_user`, `sign_in`).
+- The browser keeps the access token in memory only (`frontend/src/auth/session.ts`);
+  never put it in storage, a cookie or a URL.
 
 ## Configurations (ADR-0007)
 
@@ -153,7 +178,7 @@ Run from the repo root unless noted.
 
 ```bash
 make install    # uv sync + npm ci + pre-commit install
-make env        # create deploy/.env (DB password, CREDENTIALS_KEY) or add a missing key
+make env        # create deploy/.env (DB password, CREDENTIALS_KEY, AUTH_SIGNING_KEY) or add a missing key
 make up         # build, run migrations (one-shot `migrate` service), start the stack (UI on :8080)
 make migrate    # alembic upgrade head via the `migrate` service, without restarting anything
 make logs       # follow logs
@@ -163,6 +188,7 @@ make test-integration  # integration tests against the compose db (needs `make u
 make test-scale        # discover a generated 50-device campus (SCALE_DEVICES=200 for more)
 make fakelab-up        # stack + fake devices; then fakelab-seed, fakelab-discover,
                        # fakelab-accuracy, fakelab-down (see lab/fakelab/README.md)
+make fakelab-users     # UI users fakelab-admin/-operator/-viewer (FAKELAB_UI_PASSWORD in deploy/.env)
 make fakelab-backup    # back up every managed device's configuration now
 make fakelab-change DEVICE=dist1 SCENARIO=remove-vlan-from-trunk  # change + its syslog
 make fakelab-reset     # undo the fake lab's changes
@@ -172,6 +198,9 @@ make format     # auto-fix formatting
 make openapi    # regenerate docs/api/openapi.json and frontend/src/api/schema.d.ts
 make mock       # Prism mock server for the contract on :4010 (UI: cd frontend && npm run dev:mock)
 ```
+
+First admin of a stack: `docker compose -f deploy/docker-compose.yml exec api netops users
+create-admin` (prompts; no default account exists).
 
 Frontend tests (in `frontend/`): `npm test` (Vitest), `npm run e2e` (Playwright smoke against
 the Prism mock), `npm run e2e:fakelab` and `npm run screenshots` (real stack + fake lab).
