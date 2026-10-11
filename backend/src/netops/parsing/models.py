@@ -4,7 +4,7 @@ Interface names are canonical (netops.core.ifname.normalize), MACs are lower-cas
 colon-separated, IP addresses are canonical strings and VLAN lists are fully expanded.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from netops.db.enums import (
     Duplex,
@@ -193,3 +193,12 @@ class OspfInterface:
     address: str | None
     cost: int | None
     state: str
+
+
+@dataclass(frozen=True, slots=True)
+class RunningConfig:
+    """``show running-config`` as received (secrets included; normalized by M4)."""
+
+    hostname: str
+    # Never in repr(): a logged object must not carry the configuration's secrets.
+    text: str = field(repr=False)

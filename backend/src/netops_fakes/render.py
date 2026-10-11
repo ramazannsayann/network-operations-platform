@@ -30,8 +30,10 @@ from netops_fakes.lab import (
     ordered_ports,
     platform,
     software_line,
+    vlan_list_text,
     vlans,
 )
+from netops_fakes.running_config import show_running_config
 from netops_fakes.topology import Kind
 
 _SUPPORT = (
@@ -43,6 +45,7 @@ _SUPPORT = (
 def render(lab: Lab, state: DeviceState) -> dict[str, str]:
     """Command -> CLI output for every command this device supports."""
     outputs = {
+        "show running-config": show_running_config(lab, state),
         "show version": show_version(state),
         "show inventory": show_inventory(state),
         "show cdp neighbors detail": show_cdp(lab, state),
@@ -304,6 +307,17 @@ def _counters(physical: bool) -> str:
 """
 
 
+def _status_line(state: DeviceState, port: Port) -> str:
+    """'X is up, line protocol is up' and its down variants (switches add the reason)."""
+    if port.up:
+        return f"{port.name} is up, line protocol is up"
+    if not port.admin_up:
+        reason = " (disabled)" if state.is_switch else ""
+        return f"{port.name} is administratively down, line protocol is down{reason}"
+    reason = " (notconnect)" if state.is_switch else ""
+    return f"{port.name} is down, line protocol is down{reason}"
+
+
 def show_interfaces(state: DeviceState) -> str:
     blocks = []
     for port in ordered_ports(state):
@@ -312,7 +326,7 @@ def show_interfaces(state: DeviceState) -> str:
         address = f"  Internet address is {port.address}\n" if port.address else ""
         if port.kind is InterfaceKind.LOOPBACK:
             blocks.append(
-                f"""{port.name} is up, line protocol is up
+                f"""{_status_line(state, port)}
   Hardware is Loopback
 {description}{address}  MTU 1514 bytes, BW 8000000 Kbit/sec, DLY 5000 usec,
      reliability 255/255, txload 1/255, rxload 1/255
@@ -323,7 +337,7 @@ def show_interfaces(state: DeviceState) -> str:
             )
         elif port.kind is InterfaceKind.SVI:
             blocks.append(
-                f"""{port.name} is up, line protocol is up , Autostate Enabled
+                f"""{_status_line(state, port)} , Autostate Enabled
   Hardware is Ethernet SVI, address is {address_text}
 {description}{address}  MTU 1500 bytes, BW 1000000 Kbit/sec, DLY 10 usec,
      reliability 255/255, txload 1/255, rxload 1/255
@@ -343,15 +357,20 @@ def show_interfaces(state: DeviceState) -> str:
                 )
                 link_type, media = ", link type is auto", "N/A"
                 members = f"  Members in this channel: {names} \n"
-            protocol = "up (connected)" if state.is_switch else "up"
+            status = _status_line(state, port)
+            if port.up and state.is_switch:
+                status += " (connected)"
+            negotiated = (
+                f"Full-duplex, {_speed_text(speed)}" if port.up else "Auto-duplex, Auto-speed"
+            )
             blocks.append(
-                f"""{port.name} is up, line protocol is {protocol}
+                f"""{status}
   Hardware is {_hardware(state, port)}, address is {address_text}
 {description}{address}  MTU 1500 bytes, BW {speed * 1000} Kbit/sec, DLY 10 usec,
      reliability 255/255, txload 1/255, rxload 1/255
   Encapsulation ARPA, loopback not set
   Keepalive set (10 sec)
-  Full-duplex, {_speed_text(speed)}{link_type}, media type is {media}
+  {negotiated}{link_type}, media type is {media}
   input flow-control is on, output flow-control is unsupported
 {members}  ARP type: ARPA, ARP Timeout 04:00:00
   Last input 00:00:01, output 00:00:00, output hang never
@@ -365,22 +384,10 @@ def show_ip_interface_brief(state: DeviceState) -> str:
     for port in ordered_ports(state):
         ip = str(port.address.ip) if port.address else "unassigned"
         method = "NVRAM" if port.address else "unset"
-        lines.append(f"{port.name:<22} {ip:<15} YES {method:<6} up                    up      ")
+        status = "up" if port.up else "administratively down" if not port.admin_up else "down"
+        protocol = "up" if port.up else "down"
+        lines.append(f"{port.name:<22} {ip:<15} YES {method:<6} {status:<21} {protocol:<8}")
     return "\n".join(lines) + "\n"
-
-
-def vlan_list_text(vlans: tuple[int, ...]) -> str:
-    """(10, 20, 98, 99) -> '10,20,98-99'."""
-    parts: list[str] = []
-    start = previous = None
-    for vlan in [*vlans, None]:
-        if vlan is not None and previous is not None and vlan == previous + 1:
-            previous = vlan
-            continue
-        if start is not None:
-            parts.append(str(start) if start == previous else f"{start}-{previous}")
-        start = previous = vlan
-    return ",".join(parts)
 
 
 def show_switchport(lab: Lab, state: DeviceState) -> str:
@@ -397,6 +404,8 @@ def show_switchport(lab: Lab, state: DeviceState) -> str:
         operational = "trunk" if trunk else "static access"
         if port.channel is not None:
             operational = f"trunk (member of bundle Po{port.channel})"
+        if not port.up:
+            operational = "down"
         access = (
             f"{port.access_vlan} ({names.get(port.access_vlan or 0, 'default')})"
             if not trunk
@@ -438,7 +447,8 @@ def show_etherchannel(state: DeviceState) -> str:
     for channel in etherchannels(state):
         members = "".join(f"{abbreviate(m)}({flag})      " for m, flag in channel.members)
         number = channel.port_channel[12:]
-        rows.append(f"{number:<6} Po{number}(SU)         LACP        {members}")
+        flags = "SU" if any(flag == "P" for _, flag in channel.members) else "SD"
+        rows.append(f"{number:<6} Po{number}({flags})         LACP        {members}")
     return (
         f"""Flags:  D - down        P - bundled in port-channel
         I - stand-alone s - suspended

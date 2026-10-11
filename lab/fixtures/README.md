@@ -69,6 +69,16 @@ Written for this project, with made-up names, serial numbers, MACs and addresses
   other, so collector tests can check the stored rows end to end. The fake SSH device serves
   this directory.
 
+### `cisco_ios/show_running-config/netops_fakelab_*.raw`
+
+**Generated**, never hand-written and never copied from a device: real configurations are
+never committed (ADR-0007), so the only configuration fixtures are the fake lab's
+running-configs (`netops_fakes.running_config`) for one device of each kind (core1, dist1,
+access1, rtr1). Every secret in them is one of the obviously fake values in
+`netops_fakes/fake_secrets.py`. Regenerate them with `make fakelab-fixtures` after changing
+the renderer or `lab/fakelab/topology.yaml`; a test fails while they are stale. The
+hand-written `devices/dist-sw1/` has no running-config for the same reason.
+
 ## Known gaps
 
 - `show lldp neighbors detail` on older IOS releases does not print `Local Intf`; such

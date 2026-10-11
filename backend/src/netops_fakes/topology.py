@@ -5,6 +5,7 @@ The same format describes the fake lab (rendered by netops_fakes.lab) and, with 
 """
 
 import ipaddress
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Self
@@ -110,13 +111,46 @@ class Link(_Model):
         return data
 
 
+class PortSettings(_Model):
+    """Configuration of one port that differs from what links and hosts imply.
+
+    Change scenarios (netops_fakes.scenarios) add these; a hand-written topology may too.
+    """
+
+    device: str
+    port: str
+    description: str | None = None  # None: the derived one ("to core1 Te1/1/3")
+    shutdown: bool = False
+    allowed_vlans: list[int] | None = None  # trunks: None allows every lab VLAN
+
+    @field_validator("port")
+    @classmethod
+    def _port(cls, value: str) -> str:
+        return normalize(value)
+
+
+class ChangeRecord(_Model):
+    """A configuration change applied to a fake device (shown in its running-config header)."""
+
+    device: str
+    scenario: str
+    user: str
+    at: datetime
+    commands: list[str]
+
+
 class Topology(_Model):
     name: str
     domain: str = "lab.example.net"
     management_subnet: ipaddress.IPv4Network
+    # Where the devices send syslog ("logging host"): the events service in the fake lab.
+    syslog_host: ipaddress.IPv4Address | None = None
     vlans: list[Vlan] = Field(default_factory=list)
     devices: list[Device]
     links: list[Link] = Field(default_factory=list)
+    ports: list[PortSettings] = Field(default_factory=list)
+    # Changes applied since the lab started (empty in topology files).
+    history: list[ChangeRecord] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -132,7 +166,29 @@ class Topology(_Model):
                 if (end.device, end.port) in ports:
                     raise ValueError(f"port {end.device} {end.port} is used twice")
                 ports.add((end.device, end.port))
+        configured = [(p.device, p.port) for p in self.ports]
+        if len(set(configured)) != len(configured):
+            raise ValueError("a port has two entries under ports")
+        for device, _ in configured:
+            if device not in known:
+                raise ValueError(f"ports: {device!r} is not a device")
         return self
+
+    def port_settings(self, device: str, port: str) -> PortSettings | None:
+        return next((p for p in self.ports if p.device == device and p.port == port), None)
+
+    def with_port(self, device: str, port: str, **changes: object) -> "Topology":
+        """A copy with ``changes`` merged into the port's settings."""
+        current = self.port_settings(device, port) or PortSettings(device=device, port=port)
+        updated = current.model_copy(update=changes)
+        others = [p for p in self.ports if p is not current]
+        return self.model_copy(update={"ports": [*others, updated]})
+
+    def with_record(self, record: ChangeRecord) -> "Topology":
+        return self.model_copy(update={"history": [*self.history, record]})
+
+    def last_change(self, device: str) -> ChangeRecord | None:
+        return next((r for r in reversed(self.history) if r.device == device), None)
 
     def device(self, name: str) -> Device:
         return next(d for d in self.devices if d.name == name)

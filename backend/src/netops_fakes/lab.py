@@ -1,9 +1,11 @@
 """Derive what every device of a topology would report, as netops.parsing models.
 
 ``build(topology)`` computes, deterministically, the state the fake devices show: ports
-(from links, hosts and SVIs), spanning tree (one PVST+ tree, the same for every VLAN),
-MAC learning along the active tree, ARP, HSRP, OSPF adjacencies and routes (shortest
-paths, with ECMP), and CDP/LLDP in both directions. ``netops_fakes.render`` turns these
+(from links, hosts and SVIs, then the topology's per-port settings: descriptions, shutdown,
+trunk VLAN lists), rapid PVST+ (one tree per VLAN; a VLAN pruned from a trunk splits off
+its own part with its own root), MAC learning along each VLAN's active tree, ARP, HSRP,
+OSPF adjacencies and routes (shortest paths, with ECMP), and CDP/LLDP in both directions.
+A port that is shut down takes its cable down at both ends. ``netops_fakes.render`` turns these
 models into CLI text; the round-trip test parses that text back and expects exactly
 these models.
 """
@@ -11,6 +13,7 @@ these models.
 import heapq
 import ipaddress
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from netops.core.ifname import abbreviate, interface_kind
@@ -102,10 +105,21 @@ class Port:
     edge: bool = False  # host or AP attached
     speed_mbps: int | None = None
     ospf_role: str | None = None  # DR / BDR / DROTHER on broadcast segments
+    admin_up: bool = True  # False: "shutdown"
+    oper_up: bool = True  # False: shut down, or the other end of the cable is
 
     @property
     def l2(self) -> bool:
         return self.mode in (SwitchportMode.ACCESS, SwitchportMode.TRUNK)
+
+    @property
+    def up(self) -> bool:
+        return self.admin_up and self.oper_up
+
+    def carries(self, vlan: int) -> bool:
+        if self.mode is SwitchportMode.TRUNK:
+            return vlan in (self.allowed_vlans or ())
+        return self.mode is SwitchportMode.ACCESS and self.access_vlan == vlan
 
 
 @dataclass
@@ -120,7 +134,6 @@ class DeviceState:
     vlan_ids: tuple[int, ...] = ()
     hsrp: list[pm.HsrpGroup] = field(default_factory=list)
     stp: pm.SpanningTree | None = None
-    root_path_cost: int = 0
     macs: list[pm.MacEntry] = field(default_factory=list)
     arps: list[pm.ArpEntry] = field(default_factory=list)
     arp_ages: dict[str, str] = field(default_factory=dict)
@@ -180,13 +193,30 @@ class DeviceState:
         return self.ports.get(f"Vlan{vlan}")
 
 
+# A switch-to-switch L2 link: (device, port, peer device, peer port); channels collapsed.
+Edge = tuple[str, str, str, str]
+
+
+@dataclass
+class VlanTree:
+    """One VLAN's spanning tree. Each connected part of the VLAN elects its own root."""
+
+    root_of: dict[str, str] = field(default_factory=dict)  # switch -> root of its part
+    distance: dict[str, int] = field(default_factory=dict)  # root path cost
+    root_port: dict[str, str] = field(default_factory=dict)
+    roles: dict[str, dict[str, tuple[StpPortRole, StpPortState]]] = field(default_factory=dict)
+    active: set[Edge] = field(default_factory=set)  # edges in the active (unblocked) tree
+
+    def together(self, a: str, b: str) -> bool:
+        """Whether two switches are in the same part of the VLAN."""
+        return a in self.root_of and self.root_of.get(a) == self.root_of.get(b)
+
+
 @dataclass
 class Lab:
     topology: Topology
     devices: dict[str, DeviceState]
-    stp_root: str | None = None
-    # Switch-to-switch L2 edges in the active (non-blocked) spanning tree.
-    stp_active: set[tuple[str, str, str, str]] = field(default_factory=set)
+    stp: dict[int, VlanTree] = field(default_factory=dict)
 
     def served(self) -> list[DeviceState]:
         """Devices a fake SSH server answers for."""
@@ -215,6 +245,7 @@ def build(topology: Topology) -> Lab:
     _add_link_ports(lab, all_vlans)
     _add_host_ports(lab)
     _add_l3_interfaces(lab)
+    _apply_port_settings(lab)
     _add_hsrp(lab)
     _spanning_tree(lab)
     _mac_tables(lab)
@@ -330,20 +361,61 @@ def _add_l3_interfaces(lab: Lab) -> None:
             state.add_port("Loopback0", address=ipaddress.IPv4Interface(f"{device.loopback}/32"))
 
 
+def _apply_port_settings(lab: Lab) -> None:
+    for settings in lab.topology.ports:
+        state = lab.devices[settings.device]
+        port = state.ports.get(settings.port)
+        if port is None:
+            raise ValueError(f"ports: {settings.device} has no port {settings.port}")
+        if settings.description is not None:
+            port.description = settings.description or None
+        if settings.allowed_vlans is not None:
+            if port.mode is not SwitchportMode.TRUNK:
+                raise ValueError(f"ports: {settings.device} {port.name} is not a trunk")
+            # Configured on a port-channel, the list applies to its members too.
+            for target in [port, *channel_members(state, port)]:
+                target.allowed_vlans = tuple(sorted(set(settings.allowed_vlans)))
+        if settings.shutdown:
+            port.admin_up = port.oper_up = False
+    # A cable with one end down is down at both ends.
+    for state in lab.devices.values():
+        for port in state.ports.values():
+            if not port.oper_up and port.peer is not None:
+                peer = lab.devices[port.peer[0]].ports.get(port.peer[1])
+                if peer is not None:
+                    peer.oper_up = False
+    # A port-channel stays up while one of its members is.
+    for state in lab.devices.values():
+        for port in state.ports.values():
+            members = channel_members(state, port)
+            if members and not any(member.up for member in members):
+                port.oper_up = False
+
+
+def channel_members(state: DeviceState, port: Port) -> list[Port]:
+    if port.kind is not InterfaceKind.PORT_CHANNEL:
+        return []
+    number = int(port.name.removeprefix("Port-channel"))
+    return [p for p in state.ports.values() if p.channel == number]
+
+
 def _add_hsrp(lab: Lab) -> None:
     cores = [d for d in lab.devices.values() if d.kind is Kind.L3_SWITCH]
     if len(cores) < 2:
         return
     for vlan in lab.topology.vlans:
-        active = next((c for c in cores if vlan.id in c.device.hsrp_active), cores[0])
-        standby = next(c for c in cores if c is not active)
-        for core in cores:
+        members = [c for c in cores if (svi := c.svi(vlan.id)) and svi.address and svi.up]
+        if not members:
+            continue
+        active = next((c for c in members if vlan.id in c.device.hsrp_active), members[0])
+        standby = next((c for c in members if c is not active), None)
+        for core in members:
             svi = core.svi(vlan.id)
             if svi is None or svi.address is None:
                 continue
             is_active = core is active
             other = standby if is_active else active
-            other_svi = other.svi(vlan.id)
+            other_svi = other.svi(vlan.id) if other else None
             other_ip = str(other_svi.address.ip) if other_svi and other_svi.address else None
             role_is_standby = core is standby
             core.hsrp.append(
@@ -376,15 +448,15 @@ def _stp_cost(port: Port, state: DeviceState) -> int:
     return max(1, 20_000_000 // total)
 
 
-def _l2_edges(lab: Lab) -> list[tuple[str, str, str, str]]:
-    """(device, port, peer device, peer port) for switch-to-switch L2 links; channels collapsed."""
+def _l2_edges(lab: Lab) -> list[Edge]:
+    """Switch-to-switch L2 links that are up; port-channel members collapsed."""
     edges = []
     seen = set()
     for state in lab.devices.values():
         if not state.is_switch:
             continue
         for port in state.ports.values():
-            if not port.l2 or port.peer is None or port.edge:
+            if not port.l2 or port.peer is None or port.edge or not port.up:
                 continue
             peer_state = lab.devices[port.peer[0]]
             if not peer_state.is_switch:
@@ -410,63 +482,28 @@ def _spanning_tree(lab: Lab) -> None:
     def bridge_id(name: str) -> tuple[int, str]:
         return (switches[name].device.stp_priority, switches[name].bridge_mac)
 
-    root = min(switches, key=bridge_id)
-    adjacency: dict[str, list[tuple[str, str, str, int]]] = {name: [] for name in switches}
-    for a, a_port, b, b_port in edges:
-        cost = _stp_cost(switches[a].ports[a_port], switches[a])
-        adjacency[a].append((a_port, b, b_port, cost))
-        adjacency[b].append((b_port, a, a_port, cost))
-
-    distance = {root: 0}
-    queue = [(0, bridge_id(root), root)]
-    while queue:
-        dist, _, name = heapq.heappop(queue)
-        if dist > distance.get(name, 1 << 60):
-            continue
-        for _, peer, _, cost in adjacency[name]:
-            if dist + cost < distance.get(peer, 1 << 60):
-                distance[peer] = dist + cost
-                heapq.heappush(queue, (dist + cost, bridge_id(peer), peer))
-
-    root_port: dict[str, str] = {}
-    for name in switches:
-        if name == root or name not in distance:
-            continue
-        candidates = [
-            (distance[peer] + cost, bridge_id(peer), peer_port, port)
-            for port, peer, peer_port, cost in adjacency[name]
-            if peer in distance
-        ]
-        root_port[name] = min(candidates)[3]
+    for vlan in sorted({v for state in switches.values() for v in state.vlan_ids}):
+        lab.stp[vlan] = _vlan_tree(switches, edges, vlan, bridge_id)
 
     for name, state in switches.items():
-        state.root_path_cost = distance.get(name, 0)
-        roles: dict[str, tuple[StpPortRole, StpPortState]] = {}
-        for port_name, peer, _, _ in adjacency[name]:
-            if root_port.get(name) == port_name:
-                roles[port_name] = (StpPortRole.ROOT, StpPortState.FORWARDING)
-            elif (distance.get(name, 0), bridge_id(name)) < (
-                distance.get(peer, 0),
-                bridge_id(peer),
-            ):
-                roles[port_name] = (StpPortRole.DESIGNATED, StpPortState.FORWARDING)
-            else:
-                roles[port_name] = (StpPortRole.ALTERNATE, StpPortState.BLOCKING)
         instances, ports = [], []
-        root_state = switches[root]
         for vlan in state.vlan_ids:
-            root_id = f"{root_state.device.stp_priority + vlan} {dotted(root_state.bridge_mac)}"
+            vlan_ports = _stp_ports(state, vlan)
+            if not vlan_ports:
+                continue  # IOS has no instance for a VLAN without an active port
+            tree = lab.stp[vlan]
+            root = switches[tree.root_of[name]]
             instances.append(
                 pm.StpInstance(
                     vlan_id=vlan,
-                    root_bridge_id=root_id,
-                    root_cost=state.root_path_cost,
-                    root_interface=root_port.get(name),
-                    is_root=name == root,
+                    root_bridge_id=f"{root.device.stp_priority + vlan} {dotted(root.bridge_mac)}",
+                    root_cost=tree.distance[name],
+                    root_interface=tree.root_port.get(name),
+                    is_root=root is state,
                 )
             )
-            for port in _stp_ports(state, vlan):
-                role, port_state = roles.get(
+            for port in vlan_ports:
+                role, port_state = tree.roles[name].get(
                     port.name, (StpPortRole.DESIGNATED, StpPortState.FORWARDING)
                 )
                 ports.append(
@@ -479,33 +516,99 @@ def _spanning_tree(lab: Lab) -> None:
                     )
                 )
         state.stp = pm.SpanningTree(instances=tuple(instances), ports=tuple(ports))
-    lab.stp_root = root
-    lab.stp_active = {
+
+
+def _vlan_tree(
+    switches: dict[str, DeviceState],
+    edges: list[Edge],
+    vlan: int,
+    bridge_id: Callable[[str], tuple[int, str]],
+) -> VlanTree:
+    members = {name for name, state in switches.items() if vlan in state.vlan_ids}
+    vlan_edges = [
         (a, a_port, b, b_port)
         for a, a_port, b, b_port in edges
-        if root_port.get(a) == a_port or root_port.get(b) == b_port
+        if a in members
+        and b in members
+        and switches[a].ports[a_port].carries(vlan)
+        and switches[b].ports[b_port].carries(vlan)
+    ]
+    adjacency: dict[str, list[tuple[str, str, str, int]]] = {name: [] for name in members}
+    for a, a_port, b, b_port in vlan_edges:
+        cost = _stp_cost(switches[a].ports[a_port], switches[a])
+        adjacency[a].append((a_port, b, b_port, cost))
+        adjacency[b].append((b_port, a, a_port, cost))
+
+    tree = VlanTree()
+    # Parts of the VLAN: the lowest bridge ID of each part is its root.
+    for name in sorted(members, key=bridge_id):
+        if name in tree.root_of:
+            continue
+        tree.root_of[name] = name
+        stack = [name]
+        while stack:
+            node = stack.pop()
+            for _, peer, _, _ in adjacency[node]:
+                if peer not in tree.root_of:
+                    tree.root_of[peer] = name
+                    stack.append(peer)
+
+    distance = dict.fromkeys(set(tree.root_of.values()), 0)
+    queue = [(0, bridge_id(root), root) for root in distance]
+    heapq.heapify(queue)
+    while queue:
+        dist, _, name = heapq.heappop(queue)
+        if dist > distance.get(name, 1 << 60):
+            continue
+        for _, peer, _, cost in adjacency[name]:
+            if dist + cost < distance.get(peer, 1 << 60):
+                distance[peer] = dist + cost
+                heapq.heappush(queue, (dist + cost, bridge_id(peer), peer))
+    tree.distance = distance
+
+    for name in members:
+        if tree.root_of[name] == name:
+            continue
+        candidates = [
+            (distance[peer] + cost, bridge_id(peer), peer_port, port)
+            for port, peer, peer_port, cost in adjacency[name]
+        ]
+        tree.root_port[name] = min(candidates)[3]
+
+    for name in members:
+        roles: dict[str, tuple[StpPortRole, StpPortState]] = {}
+        for port_name, peer, _, _ in adjacency[name]:
+            if tree.root_port.get(name) == port_name:
+                roles[port_name] = (StpPortRole.ROOT, StpPortState.FORWARDING)
+            elif (distance[name], bridge_id(name)) < (distance[peer], bridge_id(peer)):
+                roles[port_name] = (StpPortRole.DESIGNATED, StpPortState.FORWARDING)
+            else:
+                roles[port_name] = (StpPortRole.ALTERNATE, StpPortState.BLOCKING)
+        tree.roles[name] = roles
+    tree.active = {
+        (a, a_port, b, b_port)
+        for a, a_port, b, b_port in vlan_edges
+        if tree.root_port.get(a) == a_port or tree.root_port.get(b) == b_port
     }
+    return tree
 
 
 def _stp_ports(state: DeviceState, vlan: int) -> list[Port]:
-    ports = []
-    for port in state.ports.values():
-        if not port.l2 or port.channel is not None:
-            continue
-        trunk = port.mode is SwitchportMode.TRUNK and vlan in (port.allowed_vlans or ())
-        if trunk or (port.mode is SwitchportMode.ACCESS and port.access_vlan == vlan):
-            ports.append(port)
+    ports = [
+        port
+        for port in state.ports.values()
+        if port.l2 and port.channel is None and port.up and port.carries(vlan)
+    ]
     return sorted(ports, key=lambda p: (p.kind is InterfaceKind.PORT_CHANNEL, p.number))
 
 
 def _mac_tables(lab: Lab) -> None:
-    tree: dict[str, list[tuple[str, str]]] = {}
-    for a, a_port, b, b_port in lab.stp_active:
-        tree.setdefault(a, []).append((a_port, b))
-        tree.setdefault(b, []).append((b_port, a))
-
-    def toward(start: str) -> dict[str, str]:
-        """Switch -> local port of ``start`` on the tree path to it."""
+    def toward(start: str, vlan: int) -> dict[str, str]:
+        """Switch -> local port of ``start`` on the VLAN's tree path to it."""
+        tree: dict[str, list[tuple[str, str]]] = {}
+        for a, a_port, b, b_port in lab.stp[vlan].active:
+            tree.setdefault(a, []).append((a_port, b))
+            tree.setdefault(b, []).append((b_port, a))
         first: dict[str, str] = {}
         queue: deque[tuple[str, str | None]] = deque([(start, None)])
         seen = {start}
@@ -522,27 +625,38 @@ def _mac_tables(lab: Lab) -> None:
     endpoints: list[tuple[int, str, str, str | None]] = []
     for state in lab.devices.values():
         for index, host in enumerate(state.device.hosts, start=1):
-            endpoints.append((host.vlan, _host_mac(state, index, host.mac), state.name, host.port))
+            if state.ports[host.port].up:
+                endpoints.append(
+                    (host.vlan, _host_mac(state, index, host.mac), state.name, host.port)
+                )
         if state.is_switch:
             for svi in state.svis():
-                endpoints.append((int(svi.name[4:]), svi.mac or "", state.name, None))
+                if svi.up:
+                    endpoints.append((int(svi.name[4:]), svi.mac or "", state.name, None))
         for port in state.ports.values():
-            if port.peer and lab.devices[port.peer[0]].kind is Kind.AP and port.access_vlan:
+            if (
+                port.peer
+                and lab.devices[port.peer[0]].kind is Kind.AP
+                and port.access_vlan
+                and port.up
+            ):
                 ap = lab.devices[port.peer[0]]
                 endpoints.append((port.access_vlan, mac(ap.index, 1), state.name, port.name))
 
     for state in lab.devices.values():
         if not state.is_switch or state.device.external:
             continue
-        paths = toward(state.name)
+        paths = {vlan: toward(state.name, vlan) for vlan in state.vlan_ids}
         entries = []
         for vlan, address, attached, attached_port in endpoints:
             if attached == state.name:
                 if attached_port is None:
                     continue  # its own SVI
                 entries.append(pm.MacEntry(vlan, address, attached_port, MacEntryType.DYNAMIC))
-            elif attached in paths:
-                entries.append(pm.MacEntry(vlan, address, paths[attached], MacEntryType.DYNAMIC))
+            elif attached in paths.get(vlan, {}):
+                entries.append(
+                    pm.MacEntry(vlan, address, paths[vlan][attached], MacEntryType.DYNAMIC)
+                )
         state.macs = sorted(entries, key=lambda e: (e.vlan_id, e.mac))
 
 
@@ -555,26 +669,55 @@ def _host_mac(state: DeviceState, index: int, configured: str | None) -> str:
 # --- ARP, OSPF and routing ----------------------------------------------------------------------
 
 
-def _subnet_members(lab: Lab) -> dict[ipaddress.IPv4Network, list[tuple[str, str, str, str]]]:
-    """Subnet -> (device, interface, ip, mac) of everything addressed in it."""
-    members: dict[ipaddress.IPv4Network, list[tuple[str, str, str, str]]] = {}
+# (device, interface, ip, mac, switch it hangs off): what is addressed in a subnet.
+Member = tuple[str, str, str, str, str]
+
+
+def _subnet_members(lab: Lab) -> dict[ipaddress.IPv4Network, list[Member]]:
+    """Subnet -> everything addressed in it that is up (ports, hosts, access points)."""
+    members: dict[ipaddress.IPv4Network, list[Member]] = {}
     for state in lab.devices.values():
         for port in state.ports.values():
-            if port.address is not None and port.kind is not InterfaceKind.LOOPBACK:
+            if port.address is not None and port.kind is not InterfaceKind.LOOPBACK and port.up:
                 members.setdefault(port.address.network, []).append(
-                    (state.name, port.name, str(port.address.ip), port.mac or "")
+                    (state.name, port.name, str(port.address.ip), port.mac or "", state.name)
                 )
         for index, host in enumerate(state.device.hosts, start=1):
-            members.setdefault(lab.topology.vlan(host.vlan).subnet, []).append(
-                ("host", f"Vlan{host.vlan}", str(host.ip), _host_mac(state, index, host.mac))
-            )
+            if state.ports[host.port].up:
+                members.setdefault(lab.topology.vlan(host.vlan).subnet, []).append(
+                    (
+                        "host",
+                        f"Vlan{host.vlan}",
+                        str(host.ip),
+                        _host_mac(state, index, host.mac),
+                        state.name,
+                    )
+                )
         if state.kind is Kind.AP:
             ap_vlan = lab.topology.vlan_of(state.device.mgmt_ip)
-            if ap_vlan is not None:
+            uplink = _uplink_of(lab, state.name)
+            if ap_vlan is not None and uplink is not None:
                 members.setdefault(ap_vlan.subnet, []).append(
-                    (state.name, "", str(state.device.mgmt_ip), mac(state.index, 1))
+                    (state.name, "", str(state.device.mgmt_ip), mac(state.index, 1), uplink)
                 )
     return members
+
+
+def _uplink_of(lab: Lab, name: str) -> str | None:
+    """The switch an end device (access point) is plugged into, if that port is up."""
+    for state in lab.devices.values():
+        for port in state.ports.values():
+            if port.peer and port.peer[0] == name and port.up:
+                return state.name
+    return None
+
+
+def _reachable(lab: Lab, port: Port, state: DeviceState, switch: str) -> bool:
+    """Whether something hanging off ``switch`` is reachable at layer 2 through ``port``."""
+    if port.kind is not InterfaceKind.SVI:
+        return True  # a routed link: its other end is up, or it would not be a member
+    tree = lab.stp.get(int(port.name[4:]))
+    return tree is not None and tree.together(state.name, switch)
 
 
 def _arp_tables(lab: Lab) -> None:
@@ -583,22 +726,30 @@ def _arp_tables(lab: Lab) -> None:
         entries: list[pm.ArpEntry] = []
         ages: dict[str, str] = {}
         for port in state.ports.values():
-            if port.address is None or port.kind is InterfaceKind.LOOPBACK:
+            if port.address is None or port.kind is InterfaceKind.LOOPBACK or not port.up:
                 continue
             own = str(port.address.ip)
             entries.append(pm.ArpEntry(own, port.mac or "", port.name, None))
             ages[own] = "-"
             if state.is_l3:
-                for device, _, ip, address in members.get(port.address.network, []):
-                    if ip != own and (device != state.name):
+                for device, _, ip, address, switch in members.get(port.address.network, []):
+                    if ip != own and device != state.name and _reachable(lab, port, state, switch):
                         entries.append(pm.ArpEntry(ip, address, port.name, None))
                         ages[ip] = "5"
             elif state.default_gateway and port.address.network.overlaps(
                 ipaddress.IPv4Network(f"{state.default_gateway}/32")
             ):
                 vlan = int(port.name[4:])
-                entries.append(pm.ArpEntry(state.default_gateway, hsrp_mac(vlan), port.name, None))
-                ages[state.default_gateway] = "3"
+                gateways = [
+                    switch
+                    for device, _, _, _, switch in members.get(port.address.network, [])
+                    if lab.devices.get(device, state).kind is Kind.L3_SWITCH
+                ]
+                if any(_reachable(lab, port, state, switch) for switch in gateways):
+                    entries.append(
+                        pm.ArpEntry(state.default_gateway, hsrp_mac(vlan), port.name, None)
+                    )
+                    ages[state.default_gateway] = "3"
         unique = {e.ip: e for e in entries}
         state.arps = sorted(unique.values(), key=lambda e: ipaddress.IPv4Address(e.ip))
         state.arp_ages = ages
@@ -611,7 +762,7 @@ def _ospf_and_routes(lab: Lab) -> None:
     router_id = {s.name: str(s.device.loopback) for s in routers}
 
     def ospf_ports(state: DeviceState) -> list[Port]:
-        return [p for p in state.ports.values() if p.address is not None]
+        return [p for p in state.ports.values() if p.address is not None and p.up]
 
     def adjacency_port(state: DeviceState, port: Port) -> bool:
         """Adjacencies form on routed links and the management VLAN SVI; other SVIs are passive."""
@@ -620,12 +771,15 @@ def _ospf_and_routes(lab: Lab) -> None:
             return vlan is not None and port.name == f"Vlan{vlan.id}"
         return port.kind is InterfaceKind.PHYSICAL
 
-    # Adjacencies: routers sharing a subnet on adjacency ports.
-    by_subnet: dict[ipaddress.IPv4Network, list[tuple[DeviceState, Port]]] = {}
+    # Adjacencies: routers sharing a subnet on adjacency ports (and, on an SVI, the same
+    # part of the VLAN).
+    by_subnet: dict[tuple[ipaddress.IPv4Network, str | None], list[tuple[DeviceState, Port]]] = {}
     for state in routers:
         for port in ospf_ports(state):
             if port.address and adjacency_port(state, port):
-                by_subnet.setdefault(port.address.network, []).append((state, port))
+                tree = lab.stp.get(int(port.name[4:])) if port.kind is InterfaceKind.SVI else None
+                part = tree.root_of.get(state.name) if tree else None
+                by_subnet.setdefault((port.address.network, part), []).append((state, port))
     adjacent: dict[str, list[tuple[str, Port, Port]]] = {s.name: [] for s in routers}
     for attached in by_subnet.values():
         if len(attached) < 2:
@@ -689,7 +843,7 @@ def _ospf_networks(lab: Lab, name: str) -> list[ipaddress.IPv4Network]:
     state = lab.devices[name]
     networks = []
     for port in state.ports.values():
-        if port.address is None:
+        if port.address is None or not port.up:
             continue
         if port.peer and lab.devices[port.peer[0]].device.external:
             continue  # the provider link is not in OSPF
@@ -711,21 +865,25 @@ def _routes(
         (
             s.name
             for s in routers
-            if any(p.peer and lab.devices[p.peer[0]].device.external for p in s.ports.values())
+            if any(
+                p.peer and lab.devices[p.peer[0]].device.external and p.up for p in s.ports.values()
+            )
         ),
         None,
     )
 
     for state in routers:
         distance = _hop_distances(state.name, adjacent)
-        connected = {p.address.network: (p, p.address) for p in state.ports.values() if p.address}
+        connected = {
+            p.address.network: (p, p.address) for p in state.ports.values() if p.address and p.up
+        }
         routes: list[pm.Route] = []
         # Default route: a static route to the provider on the ASBR, OSPF E2 everywhere else.
         provider_port = next(
             (
                 p
                 for p in state.ports.values()
-                if p.peer and lab.devices[p.peer[0]].device.external and p.address
+                if p.peer and lab.devices[p.peer[0]].device.external and p.address and p.up
             ),
             None,
         )
@@ -830,7 +988,7 @@ def platform(state: DeviceState) -> str:
 def _neighbors(lab: Lab) -> None:
     for state in lab.served():
         for port in state.ports.values():
-            if port.peer is None:
+            if port.peer is None or not port.up:
                 continue
             peer = lab.devices[port.peer[0]]
             remote_port = port.peer[1]
@@ -884,14 +1042,15 @@ def interface_statuses(state: DeviceState) -> list[pm.InterfaceStatus]:
             pm.InterfaceStatus(
                 name=port.name,
                 kind=port.kind,
-                admin_up=True,
-                oper_up=True,
+                admin_up=port.admin_up,
+                oper_up=port.oper_up,
                 err_disabled=False,
                 description=port.description,
                 mac=port.mac,
                 mtu=1514 if port.kind is InterfaceKind.LOOPBACK else 1500,
-                speed_mbps=port.speed_mbps if physical else None,
-                duplex=Duplex.FULL if physical else None,
+                # A port without link negotiates nothing: "Auto-duplex, Auto-speed".
+                speed_mbps=port.speed_mbps if physical and port.up else None,
+                duplex=(Duplex.FULL if port.up else Duplex.AUTO) if physical else None,
                 address=str(port.address) if port.address else None,
                 in_errors=0,
                 crc_errors=0,
@@ -899,6 +1058,20 @@ def interface_statuses(state: DeviceState) -> list[pm.InterfaceStatus]:
             )
         )
     return statuses
+
+
+def vlan_list_text(vlans: tuple[int, ...]) -> str:
+    """(10, 20, 98, 99) -> '10,20,98-99'."""
+    parts: list[str] = []
+    start = previous = None
+    for vlan in [*vlans, None]:
+        if vlan is not None and previous is not None and vlan == previous + 1:
+            previous = vlan
+            continue
+        if start is not None:
+            parts.append(str(start) if start == previous else f"{start}-{previous}")
+        start = previous = vlan
+    return ",".join(parts)
 
 
 def ordered_ports(state: DeviceState) -> list[Port]:
@@ -933,7 +1106,9 @@ def etherchannels(state: DeviceState) -> list[pm.EtherChannel]:
         pm.EtherChannel(
             port_channel=f"Port-channel{channel}",
             protocol="LACP",
-            members=tuple((p.name, "P") for p in ordered_ports(state) if p.channel == channel),
+            members=tuple(
+                (p.name, "P" if p.up else "D") for p in ordered_ports(state) if p.channel == channel
+            ),
         )
         for channel in channels
     ]
@@ -955,7 +1130,10 @@ def vlans(lab: Lab, state: DeviceState) -> list[pm.Vlan]:
 def ip_interfaces(state: DeviceState) -> list[pm.IpInterface]:
     return [
         pm.IpInterface(
-            port.name, str(port.address.ip) if port.address else None, admin_up=True, oper_up=True
+            port.name,
+            str(port.address.ip) if port.address else None,
+            admin_up=port.admin_up,
+            oper_up=port.oper_up,
         )
         for port in ordered_ports(state)
     ]

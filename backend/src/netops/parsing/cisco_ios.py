@@ -43,6 +43,7 @@ from netops.parsing.models import (
     OspfInterface,
     OspfNeighbor,
     Route,
+    RunningConfig,
     SpanningTree,
     StpInstance,
     StpPort,
@@ -509,6 +510,25 @@ def parse_ospf_interface_brief(raw: str) -> list[OspfInterface]:
     return interfaces
 
 
+_HOSTNAME = re.compile(r"^hostname (\S+)\s*$", re.MULTILINE)
+
+
+def parse_running_config(raw: str) -> RunningConfig:
+    """The configuration text, checked for completeness.
+
+    A cut-off answer (session dropped, read timeout) or the partial view a user below
+    privilege level 15 gets must not become a new version: that would look like a change.
+    """
+    lines = raw.replace("\r\n", "\n").rstrip().splitlines()
+    hostname = _HOSTNAME.search(raw)
+    if hostname is None or not lines or lines[-1].strip() != "end":
+        raise ParseError(
+            "show running-config: incomplete output (no hostname or no final 'end'; "
+            "the account needs privilege level 15)"
+        )
+    return RunningConfig(hostname=hostname.group(1), text=raw)
+
+
 # Command (exactly as sent to the device) -> parser.
 PARSERS: dict[str, Callable[[str], object]] = {
     "show version": parse_show_version,
@@ -527,6 +547,7 @@ PARSERS: dict[str, Callable[[str], object]] = {
     "show standby brief": parse_standby_brief,
     "show ip ospf neighbor": parse_ospf_neighbors,
     "show ip ospf interface brief": parse_ospf_interface_brief,
+    "show running-config": parse_running_config,
 }
 
 

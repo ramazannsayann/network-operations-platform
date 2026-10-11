@@ -1,0 +1,190 @@
+Building configuration...
+
+Current configuration : 4301 bytes
+!
+! Last configuration change at 09:00:00 UTC Mon Oct 5 2026 by admin
+! NVRAM config last updated at 09:00:00 UTC Mon Oct 5 2026 by admin
+!
+version 17.9
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+!
+hostname core1
+!
+boot-start-marker
+boot-end-marker
+!
+logging buffered 64000 informational
+no logging console
+enable secret 9 $9$FAKElabENABLE$NotARealHash.FakeLabEnableSecret.000000000001
+!
+aaa new-model
+!
+aaa group server tacacs+ LAB-TACACS
+ server name LAB-TACACS-1
+!
+aaa authentication login default group LAB-TACACS local
+aaa authorization exec default group LAB-TACACS local if-authenticated
+aaa accounting commands 15 default start-stop group LAB-TACACS
+!
+aaa session-id common
+clock timezone UTC 0 0
+ip routing
+!
+ip domain name lab.example.net
+!
+login on-success log
+!
+vtp mode transparent
+!
+spanning-tree mode rapid-pvst
+spanning-tree extend system-id
+spanning-tree vlan 10,20,30,98-99 priority 24576
+!
+username admin privilege 15 secret 9 $9$FAKElabADMIN0$NotARealHash.FakeLabAdminSecret.0000000000002
+username netops-ro privilege 15 secret 9 $9$FAKElabREADER$NotARealHash.FakeLabReaderSecret.000000000003
+!
+vlan 10
+ name STAFF
+!
+vlan 20
+ name STUDENTS
+!
+vlan 30
+ name APS
+!
+vlan 98
+ name MGMT-B
+!
+vlan 99
+ name MGMT
+!
+interface Loopback0
+ ip address 10.255.0.130 255.255.255.255
+!
+interface Port-channel1
+ description to core2 Po1
+ switchport trunk allowed vlan 10,20,30,98-99
+ switchport mode trunk
+!
+interface GigabitEthernet1/0/48
+ description to rtr1 Gi0/0/1
+ no switchport
+ ip address 10.255.0.193 255.255.255.252
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 7 FAKE7OSPF0000009
+!
+interface TenGigabitEthernet1/1/1
+ description to core2 Te1/1/1
+ switchport trunk allowed vlan 10,20,30,98-99
+ switchport mode trunk
+ channel-group 1 mode active
+!
+interface TenGigabitEthernet1/1/2
+ description to core2 Te1/1/2
+ switchport trunk allowed vlan 10,20,30,98-99
+ switchport mode trunk
+ channel-group 1 mode active
+!
+interface TenGigabitEthernet1/1/3
+ description to dist1 Te1/1/1
+ switchport trunk allowed vlan 10,20,30,98-99
+ switchport mode trunk
+!
+interface TenGigabitEthernet1/1/4
+ description to dist2 Te1/1/1
+ switchport trunk allowed vlan 10,20,30,98-99
+ switchport mode trunk
+!
+interface Vlan10
+ description STAFF
+ ip address 10.10.10.2 255.255.255.0
+ standby 10 ip 10.10.10.1
+ standby 10 priority 110
+ standby 10 preempt
+ standby 10 authentication md5 key-string 7 FAKE7HSRP0000008
+!
+interface Vlan20
+ description STUDENTS
+ ip address 10.10.20.2 255.255.255.0
+ standby 20 ip 10.10.20.1
+ standby 20 authentication md5 key-string 7 FAKE7HSRP0000008
+!
+interface Vlan30
+ description APS
+ ip address 10.255.0.34 255.255.255.224
+ standby 30 ip 10.255.0.33
+ standby 30 authentication md5 key-string 7 FAKE7HSRP0000008
+!
+interface Vlan98
+ description MGMT-B
+ ip address 10.255.0.66 255.255.255.192
+ standby 98 ip 10.255.0.65
+ standby 98 priority 110
+ standby 98 preempt
+ standby 98 authentication md5 key-string 7 FAKE7HSRP0000008
+!
+interface Vlan99
+ description MGMT
+ ip address 10.255.0.2 255.255.255.224
+ standby 99 ip 10.255.0.1
+ standby 99 priority 110
+ standby 99 preempt
+ standby 99 authentication md5 key-string 7 FAKE7HSRP0000008
+!
+router ospf 1
+ router-id 10.255.0.130
+ passive-interface default
+ no passive-interface GigabitEthernet1/0/48
+ no passive-interface Vlan99
+ network 10.255.0.130 0.0.0.0 area 0
+ network 10.255.0.193 0.0.0.0 area 0
+ network 10.10.10.2 0.0.0.0 area 0
+ network 10.10.20.2 0.0.0.0 area 0
+ network 10.255.0.34 0.0.0.0 area 0
+ network 10.255.0.66 0.0.0.0 area 0
+ network 10.255.0.2 0.0.0.0 area 0
+!
+ip ssh version 2
+ip scp server enable
+!
+logging origin-id hostname
+logging source-interface Vlan99
+logging host 10.255.0.253
+!
+snmp-server community FAKE-lab-snmp-community-5 RO
+snmp-server location Fake lab, rack 1
+snmp-server contact netops-lab@example.net
+!
+tacacs server LAB-TACACS-1
+ address ipv4 192.0.2.49
+ key 7 FAKE7TACACS00006
+!
+banner motd ^C
+core1: fake lab device. Authorized use only.
+^C
+!
+line con 0
+ exec-timeout 15 0
+ stopbits 1
+line vty 0 4
+ exec-timeout 15 0
+ password 7 FAKE7LINE0000004
+ transport input ssh
+line vty 5 15
+ transport input ssh
+!
+ntp authentication-key 1 md5 FAKE7NTP00000007 7
+ntp authenticate
+ntp trusted-key 1
+ntp server 192.0.2.123 key 1
+!
+archive
+ log config
+  logging enable
+  logging size 200
+  notify syslog contenttype plaintext
+  hidekeys
+!
+end

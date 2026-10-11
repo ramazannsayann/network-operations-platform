@@ -215,8 +215,12 @@ def test_synthetic_topologies_have_the_same_structure_and_round_trip(n: int) -> 
     for name in ("rtr1", "core1", "dist1", "access1"):
         state = lab.devices[name]
         for command, text in render(lab, state).items():
-            expected = state.expected[command]
             got = parse(command, text)
+            if command == "show running-config":
+                assert isinstance(got, pm.RunningConfig)
+                assert got.hostname == name
+                continue
+            expected = state.expected[command]
             assert got == (list(expected) if isinstance(expected, list) else expected), command
     cdp_links = set()
     for state in lab.served():
