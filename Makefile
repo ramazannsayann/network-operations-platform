@@ -4,7 +4,8 @@ COMPOSE := docker compose -f deploy/docker-compose.yml
 
 .DEFAULT_GOAL := help
 .PHONY: help install env up down logs ps migrate test test-integration test-scale lint format openapi mock \
-	fakelab-compose fakelab-up fakelab-seed fakelab-discover fakelab-accuracy fakelab-down
+	fakelab-compose fakelab-up fakelab-seed fakelab-discover fakelab-accuracy fakelab-down \
+	fakelab-change fakelab-reset fakelab-backup fakelab-fixtures
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -84,6 +85,10 @@ fakelab-compose: ## Regenerate deploy/docker-compose.fakelab.yml from the topolo
 	cd backend && uv run python -m netops_fakes.compose ../lab/fakelab/topology.yaml \
 	  > ../deploy/docker-compose.fakelab.yml
 
+fakelab-fixtures: ## Regenerate the running-config fixtures (lab/fixtures) from the fake lab
+	cd backend && uv run python -m netops_fakes.fixtures ../lab/fakelab/topology.yaml \
+	  ../lab/fixtures/cisco_ios/show_running-config
+
 fakelab-up: env ## Start the stack plus the fake lab's devices (worker joins 10.255.0.0/24)
 	@grep -q '^FAKELAB_PASSWORD=' deploy/.env || { \
 	  echo "FAKELAB_PASSWORD=$$(openssl rand -hex 16)" >> deploy/.env; \
@@ -108,6 +113,24 @@ fakelab-accuracy: ## Compare the inventory with lab/fakelab/topology.yaml (preci
 	set -a && . ./deploy/.env && set +a && cd backend && \
 	POSTGRES_HOST=127.0.0.1 POSTGRES_PORT="$${DB_HOST_PORT:-5433}" \
 	uv run python ../tools/eval/discovery_accuracy.py ../lab/fakelab/topology.yaml
+
+# A change scenario (netops_fakes.scenarios), applied inside the device's own container so
+# its syslog leaves from the device's address. Optional: PORT=Gi1/0/2 VLAN=20 TEXT="..."
+# CHANGE_USER=jdoe SOURCE_IP=192.0.2.77.
+DEVICE ?= dist1
+SCENARIO ?= remove-vlan-from-trunk
+CHANGE_USER ?= jdoe
+SOURCE_IP ?= 192.0.2.77
+fakelab-change: ## Change a fake device (DEVICE=dist1 SCENARIO=remove-vlan-from-trunk) + syslog
+	$(COMPOSE_FAKELAB) exec -T fake-$(DEVICE) python -m netops_fakes.change apply \
+	  /lab/topology.yaml $(DEVICE) $(SCENARIO) --user "$(CHANGE_USER)" --source-ip "$(SOURCE_IP)" \
+	  $(if $(PORT),--port "$(PORT)") $(if $(VLAN),--vlan "$(VLAN)") $(if $(TEXT),--text "$(TEXT)")
+
+fakelab-reset: ## Undo every fake lab change (no syslog: the next backup records the revert)
+	$(COMPOSE_FAKELAB) exec -T fake-core1 python -m netops_fakes.change reset /lab/topology.yaml
+
+fakelab-backup: ## Back up every managed device's configuration now (as the nightly job does)
+	$(COMPOSE_FAKELAB) exec -T api netops configs backup
 
 fakelab-down: ## Stop the whole stack including the fake lab (start again with make up)
 	$(COMPOSE_FAKELAB) down

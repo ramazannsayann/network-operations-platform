@@ -4,8 +4,11 @@
 
 ``make fakelab-compose`` writes the output to deploy/docker-compose.fakelab.yml. One
 container per served device and management address, with that address on the ``fakelab``
-network; the worker joins that network so discovery can reach them. A test keeps the
-committed file in sync with the topology.
+network; the worker joins that network so discovery can reach them, and the events service
+joins it at the topology's ``syslog_host``, so syslog from the devices arrives with their
+real source addresses. All fake devices share the ``fakelab-state`` volume: the changes
+applied by ``make fakelab-change``. A test keeps the committed file in sync with the
+topology.
 """
 
 import argparse
@@ -25,9 +28,12 @@ HEADER = """\
 #   make fakelab-up        start the stack and the fake devices
 #   make fakelab-seed      create the fake lab's credential profiles
 #   make fakelab-discover  discover the fake lab from core1
+#   make fakelab-change    apply a change scenario (DEVICE=, SCENARIO=) and send its syslog
+#   make fakelab-reset     undo all changes
 #   make fakelab-down      stop everything
 # The worker joins the fakelab network, so discovery reaches the devices at their
-# management addresses. Nothing here is reachable from outside the host.
+# management addresses; the events service joins it at the devices' syslog host.
+# Nothing here is reachable from outside the host.
 """
 
 
@@ -55,6 +61,12 @@ def render(topology: Topology, topology_path: str = "../lab/fakelab/topology.yam
                 "networks": {"fakelab": {"ipv4_address": str(address)}},
             }
     services["worker"] = {"networks": {"default": {}, "fakelab": {}}}
+    if topology.syslog_host is not None:
+        if topology.syslog_host not in network:
+            raise ValueError(f"syslog_host {topology.syslog_host} is outside {network}")
+        services["events"] = {
+            "networks": {"default": {}, "fakelab": {"ipv4_address": str(topology.syslog_host)}}
+        }
     document = {
         "services": services,
         "networks": {
@@ -71,6 +83,7 @@ def render(topology: Topology, topology_path: str = "../lab/fakelab/topology.yam
                 }
             }
         },
+        "volumes": {"fakelab-state": {}},
     }
     anchor = f"""\
 x-fake-device: &fake-device
@@ -85,8 +98,11 @@ x-fake-device: &fake-device
   environment:
     FAKELAB_USERNAME: ${{FAKELAB_USERNAME:-netops-ro}}
     FAKELAB_PASSWORD: ${{FAKELAB_PASSWORD:?run make fakelab-up, which adds it to deploy/.env}}
+    FAKELAB_STATE: /lab/state/topology.json
   volumes:
     - {topology_path}:/lab/topology.yaml:ro
+    # Changes applied by `make fakelab-change`, shared by every fake device.
+    - fakelab-state:/lab/state
   # Port 22 without root inside the container.
   sysctls:
     net.ipv4.ip_unprivileged_port_start: "0"
