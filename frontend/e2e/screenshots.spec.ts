@@ -49,6 +49,38 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByText('Bulundu').first()).toBeVisible()
       await settle(page)
       await page.screenshot({ path: `${OUT}/discovery-run-${scheme}.png`, fullPage: true })
+
+      // M4: needs backups and at least one change of dist1 (make fakelab-backup,
+      // make fakelab-change DEVICE=dist1 SCENARIO=remove-vlan-from-trunk).
+      await page.goto('/configs')
+      await expect(page.getByRole('row').filter({ hasText: 'dist1' })).toBeVisible()
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/configs-${scheme}.png`, fullPage: true })
+
+      await page.getByRole('link', { name: 'dist1', exact: true }).click()
+      await expect(page.getByTestId('config-timeline')).toBeVisible()
+      await expect(page.getByRole('table', { name: 'Konfigürasyon' })).toBeVisible()
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/config-tab-${scheme}.png`, fullPage: true })
+
+      await page.locator('label', { hasText: 'Karşılaştır' }).click()
+      await expect(page.getByTestId('config-diff')).toBeVisible()
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/config-diff-split-${scheme}.png`, fullPage: true })
+      await page.locator('label', { hasText: 'Birleşik' }).click()
+      await expect(page.getByRole('table', { name: 'Birleşik' })).toBeVisible()
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/config-diff-unified-${scheme}.png`, fullPage: true })
+
+      await page.goto('/config-changes')
+      await expect(page.getByTestId('config-changes')).toBeVisible()
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/config-changes-${scheme}.png`, fullPage: true })
+
+      await page.goto('/events')
+      await expect(page.getByTestId('events-table')).toBeVisible()
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/events-${scheme}.png`, fullPage: true })
     })
   })
 }

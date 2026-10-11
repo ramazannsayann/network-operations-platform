@@ -13,11 +13,14 @@ decisions and their reasons are in
 [docs/adr/0001-technology-stack.md](docs/adr/0001-technology-stack.md).
 
 Current state: scaffolding, the shared data model, the v1 API contract, encrypted
-credential profiles, the read-only SSH layer, parsers for 16 IOS/IOS-XE show commands, the
+credential profiles, the read-only SSH layer, parsers for 17 IOS/IOS-XE show commands, the
 M2 collectors (`collect_device`), M1 discovery (BFS over CDP/LLDP, links, roles;
-`netops.discover`), the device/discovery/job/topology endpoints, the `netops` operator CLI,
-the fake lab and the first UI (shell, map, devices, discovery). Other endpoints still answer
-501. No SNMP polling, alarms, config management or authentication yet.
+`netops.discover`) and topology, M4 configuration backups (local Git repository,
+redaction, diffs, external change detection) with a syslog receiver (the `events`
+service), the device/discovery/job/topology/config/event endpoints, the `netops` operator
+CLI, the fake lab with its change simulator and the UI (shell, map, devices, discovery,
+config, config changes, events). Other endpoints still answer 501. No SNMP polling,
+alarms, compliance, M5 push or authentication yet.
 
 ## Architecture
 
@@ -26,9 +29,12 @@ browser ──► web (nginx: static React app, proxies /api and /ws)
               └─► api (FastAPI, uvicorn) ──► db (PostgreSQL 16 + TimescaleDB)
                                          └─► redis (cache, pub/sub)
             scheduler (Celery beat) ──► redis (broker) ──► worker (Celery) ──► db / devices
+devices ──syslog, UDP 514──► events (asyncio receiver) ──► db, redis (broker)
+worker (read-write), api (read-only) ──► config-repo volume (local Git repository)
 ```
 
-`api`, `worker` and `scheduler` run from the same backend image with different commands.
+`api`, `worker`, `scheduler` and `events` run from the same backend image with different
+commands.
 
 ## Module map
 
@@ -36,8 +42,8 @@ browser ──► web (nginx: static React app, proxies /api and /ws)
 | --- | --- | --- |
 | M1 | Discovery & topology (seed/subnet scans, CDP/LLDP, topology graph) | `backend/src/netops/discovery/` (engine, links, roles; [ADR-0005](docs/adr/0005-discovery.md)) |
 | M2 | Inventory (facts, interfaces, VLANs, ARP/MAC, routes, HSRP, STP; device detail) | `backend/src/netops/inventory/` (collectors, `collect_device` task) |
-| M3 | Monitoring & alarms (SNMP/SSH polling, time-series metrics, thresholds) | `backend/src/netops/collectors/` |
-| M4 | Config management (backup, versioning, diff, compliance) | `backend/src/netops/configmgmt/` |
+| M3 | Monitoring & alarms (SNMP/SSH polling, time-series metrics, thresholds) | `backend/src/netops/collectors/`; syslog receiver: `backend/src/netops/events/` |
+| M4 | Config management (backup, versioning, diff, compliance) | `backend/src/netops/configmgmt/` (normalize, parser, redact, diff, store, backup, changes; [ADR-0007](docs/adr/0007-config-management.md)) |
 | M5 | Central configuration (templated changes, dry-run, approval, rollback) | `backend/src/netops/configmgmt/` |
 | M6 | Fault diagnosis (alarm/topology/change correlation, root-cause hints) | `backend/src/netops/diagnosis/` |
 | M7 | Security (authentication, RBAC, credential vault, audit log) | credential profiles only: `db/models/credentials.py`, `core/crypto.py` |
@@ -106,6 +112,21 @@ diagrams) and [ADR-0002](docs/adr/0002-data-model.md) (principles). In short:
 - SSH sessions connect where `netops.netaccess.target` resolves the management address to
   (identity in production). Never use the resolved address for scope checks or storage.
 
+## Configurations (ADR-0007)
+
+- Complete configurations (secrets included) live only in the local Git repository
+  (`netops.configmgmt.store`, volume `config-repo`); the database has commit, hash and
+  size. Never push it anywhere; never commit a real configuration to this repository.
+- Every configuration text that leaves the backend (API, UI, logs, diffs, commit
+  messages, syslog commands) goes through `netops.configmgmt.redact`; there is no endpoint
+  for the raw text. A new secret-bearing command gets a rule and a case in
+  `tests/test_configmgmt.py`. Never log configuration text or device output; the
+  netmiko/paramiko/nornir loggers stay at WARNING (`netops.core.logging`).
+- Diffs come from `netops.configmgmt.diff.redacted_diff` (computed on the real text,
+  printed redacted); IOS configuration structure from `netops.configmgmt.parser` (no GPL
+  libraries such as ciscoconfparse).
+- Configuration fixtures are generated from the fake lab only (`make fakelab-fixtures`).
+
 ## Discovery (ADR-0005)
 
 - `netops.discovery.engine.run_discovery` is one BFS run (Celery task `netops.discover`):
@@ -142,6 +163,10 @@ make test-integration  # integration tests against the compose db (needs `make u
 make test-scale        # discover a generated 50-device campus (SCALE_DEVICES=200 for more)
 make fakelab-up        # stack + fake devices; then fakelab-seed, fakelab-discover,
                        # fakelab-accuracy, fakelab-down (see lab/fakelab/README.md)
+make fakelab-backup    # back up every managed device's configuration now
+make fakelab-change DEVICE=dist1 SCENARIO=remove-vlan-from-trunk  # change + its syslog
+make fakelab-reset     # undo the fake lab's changes
+make fakelab-fixtures  # regenerate the running-config fixtures from the fake lab
 make lint       # ruff, ruff format --check, mypy --strict, eslint, prettier, tsc
 make format     # auto-fix formatting
 make openapi    # regenerate docs/api/openapi.json and frontend/src/api/schema.d.ts

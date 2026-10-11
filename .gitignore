@@ -4,6 +4,9 @@
 !.env.example
 *.pem
 *.key
+# Local data: the configuration repository of a dev run (complete device configurations).
+backend/var/
+*.cfg
 
 # Python
 __pycache__/

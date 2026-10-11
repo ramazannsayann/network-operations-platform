@@ -21,6 +21,9 @@ _RESERVED_ATTRS = frozenset(
 
 # Third-party loggers that install their own handlers; we route them through ours instead.
 _CAPTURED_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access", "celery")
+# Loggers that write raw device I/O at DEBUG: whole running-configs, secrets included
+# (ADR-0007). They never go below WARNING, whatever LOG_LEVEL says.
+DEVICE_IO_LOGGERS = ("netmiko", "paramiko", "nornir")
 
 
 class JsonFormatter(logging.Formatter):
@@ -59,3 +62,10 @@ def configure_logging(level: str = "INFO", fmt: Literal["json", "console"] = "js
         captured = logging.getLogger(name)
         captured.handlers.clear()
         captured.propagate = True
+    quiet_device_io()
+
+
+def quiet_device_io() -> None:
+    """Keep device I/O (configurations, command output) out of the logs."""
+    for name in DEVICE_IO_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)

@@ -17,7 +17,12 @@ celery_app = Celery(
     "netops",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["netops.workers.tasks", "netops.inventory.tasks", "netops.discovery.tasks"],
+    include=[
+        "netops.workers.tasks",
+        "netops.inventory.tasks",
+        "netops.discovery.tasks",
+        "netops.configmgmt.tasks",
+    ],
 )
 celery_app.conf.update(
     task_serializer="json",
@@ -32,6 +37,11 @@ celery_app.conf.update(
         "cleanup-collection-runs": {
             "task": "netops.cleanup_collection_runs",
             "schedule": crontab(hour=3, minute=17),
+        },
+        # M4: nightly by default (CONFIG_BACKUP_SCHEDULE, a cron expression in UTC).
+        "backup-configs": {
+            "task": "netops.backup_configs",
+            "schedule": crontab.from_string(settings.config_backup_schedule),
         },
     },
 )

@@ -62,7 +62,47 @@ the map: 14 cables, two of them one EtherChannel), and `npm run screenshots` ref
 `docs/screenshots/`.
 
 After editing `topology.yaml`, run `make fakelab-compose` to regenerate
-`deploy/docker-compose.fakelab.yml` (a test fails while it is stale).
+`deploy/docker-compose.fakelab.yml` (a test fails while it is stale), and
+`make fakelab-fixtures` to regenerate the running-config fixtures in `lab/fixtures/`.
+
+## Configurations and the change simulator
+
+Every fake device also serves `show running-config`, rendered from the same state as its
+other outputs (VLANs, trunks and their VLAN lists, access ports, port-channels, SVIs with
+HSRP, OSPF, descriptions, shut ports), with obviously fake secrets
+(`backend/src/netops_fakes/fake_secrets.py`) and `logging host` pointing at the events
+service (`syslog_host: 10.255.0.253` in `topology.yaml`).
+
+A change scenario changes a fake device the way an operator would, keeps every output of
+every device consistent (the running-config, `show interfaces switchport`, spanning tree,
+MAC and ARP tables, CDP/LLDP) and sends the syslog a device with archive logging sends:
+one `%PARSER-5-CFGLOG_LOGGEDCMD` per command, link messages, then `%SYS-5-CONFIG_I`, from
+the device's own address.
+
+```bash
+make fakelab-backup     # back up every managed device now (what the nightly job does)
+make fakelab-change DEVICE=dist1 SCENARIO=remove-vlan-from-trunk
+make fakelab-change DEVICE=access1 SCENARIO=shutdown-port CHANGE_USER=asmith
+make fakelab-change DEVICE=dist1 SCENARIO=change-description TEXT="uplink to access2"
+make fakelab-reset      # undo every change (no syslog: the next backup finds the revert)
+```
+
+| Scenario | Default target | Effect |
+| --- | --- | --- |
+| `remove-vlan-from-trunk` | VLAN 20 on the device's last trunk towards a switch with VLAN 20 hosts (on dist1: Gi1/0/2 to access2) | The VLAN's hosts behind the trunk are cut off: they leave the other switches' MAC tables and the cores' ARP tables; on access2 VLAN 20 elects its own root. |
+| `shutdown-port` | The first port with a host, else that trunk | The cable goes down at both ends: interface state, CDP/LLDP, spanning tree, MAC and ARP follow. |
+| `change-description` | That trunk | Only the description (and the running-config) changes. |
+
+Options: `PORT=Gi1/0/2`, `VLAN=20`, `TEXT=...`, `CHANGE_USER=jdoe`, `SOURCE_IP=192.0.2.77`.
+The change appears in the UI ("Config değişiklikleri", the device's Config tab) about 30 s
+later: the events service waits `CONFIG_CHANGE_DEBOUNCE_SECONDS` after the last message,
+then a worker backs the device up (about one more second in the fake lab).
+
+The scenarios are building blocks (`netops_fakes.scenarios`: remove/add a VLAN on a trunk,
+shut/enable a port, change a description), each returning the changed topology, the typed
+commands and the link messages, so M6 can stage its faults with them. Changes live in the
+`fakelab-state` volume, shared by all fake devices; in tests `LocalLab.change` applies
+them in memory and sends the syslog from a socket mapped to the device's address.
 
 ## Scale
 

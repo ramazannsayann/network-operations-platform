@@ -16,7 +16,9 @@ import {
   IconBell,
   IconDeviceDesktop,
   IconFileSettings,
+  IconHistory,
   IconMap2,
+  IconMessages,
   IconMoon,
   IconRadar,
   IconServer,
@@ -33,12 +35,12 @@ const LINKS = [
   { to: '/topology', label: 'nav.map', icon: IconMap2 },
   { to: '/devices', label: 'nav.devices', icon: IconServer },
   { to: '/discovery', label: 'nav.discovery', icon: IconRadar },
+  { to: '/configs', label: 'nav.config', icon: IconFileSettings },
+  { to: '/config-changes', label: 'nav.configChanges', icon: IconHistory },
+  { to: '/events', label: 'nav.events', icon: IconMessages },
 ] as const
 
-const LATER = [
-  { label: 'nav.alarms', icon: IconBell },
-  { label: 'nav.config', icon: IconFileSettings },
-] as const
+const LATER = [{ label: 'nav.alarms', icon: IconBell }] as const
 
 function ThemeMenu() {
   const { t } = useTranslation()

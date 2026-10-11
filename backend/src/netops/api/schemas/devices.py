@@ -167,7 +167,9 @@ class DeviceRefreshRequest(ApiModel):
     model_config = example({"kinds": ["interfaces", "mac_table", "arp_table"]})
 
     kinds: list[CollectionKind] | None = Field(
-        default=None, description="What to collect now; all supported kinds when omitted."
+        default=None,
+        description="What to collect now. When omitted: every kind the device's type collects "
+        "by default; the configuration (``config``) only when named.",
     )
 
 

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from netops.configmgmt.backup import persist_config
 from netops.db.enums import CollectionKind, DeviceType
 from netops.db.models import (
     ArpEntry,
@@ -391,11 +392,19 @@ COLLECTORS: dict[CollectionKind, Collector] = {
             "show ip ospf interface brief",
             required=2,
         ),
+        # M4 (netops.configmgmt.backup).
+        _collector(CollectionKind.CONFIG, persist_config, "show running-config", required=1),
     )
 }
 
-# Collection kinds collect_device runs by default ("config" belongs to M4).
-DEFAULT_KINDS: tuple[CollectionKind, ...] = tuple(COLLECTORS)
+# Collected only when asked for: config backups run on their own schedule, on change
+# events and on request (a device refresh that names the kind).
+ON_REQUEST_KINDS: tuple[CollectionKind, ...] = (CollectionKind.CONFIG,)
+
+# Collection kinds collect_device runs by default.
+DEFAULT_KINDS: tuple[CollectionKind, ...] = tuple(
+    kind for kind in COLLECTORS if kind not in ON_REQUEST_KINDS
+)
 
 # --- command sets by device type ----------------------------------------------------------------
 
@@ -437,7 +446,13 @@ KINDS_BY_TYPE: dict[DeviceType, tuple[CollectionKind, ...]] = {
 
 
 def kinds_for(device_type: DeviceType) -> tuple[CollectionKind, ...]:
+    """What a device of this type collects by default."""
     return KINDS_BY_TYPE.get(device_type, DEFAULT_KINDS)
+
+
+def supports(device_type: DeviceType, kind: CollectionKind) -> bool:
+    """Whether a device of this type can collect ``kind`` (on request or by default)."""
+    return kind in ON_REQUEST_KINDS or kind in kinds_for(device_type)
 
 
 def commands_for(kind: CollectionKind, device_type: DeviceType) -> tuple[str, ...]:

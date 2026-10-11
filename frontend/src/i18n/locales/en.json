@@ -11,7 +11,9 @@
     "alarms": "Alarms",
     "config": "Config",
     "soon": "soon",
-    "toggle": "Toggle menu"
+    "toggle": "Toggle menu",
+    "configChanges": "Config changes",
+    "events": "Events"
   },
   "header": {
     "health": {
@@ -115,6 +117,13 @@
       "lldp": "LLDP",
       "arp": "ARP",
       "manual": "Manual"
+    },
+    "configTrigger": {
+      "scheduled": "Scheduled",
+      "change_event": "Change event",
+      "manual": "Manual",
+      "pre_change": "Before change",
+      "post_change": "After change"
     }
   },
   "devices": {
@@ -195,6 +204,11 @@
       "errDisabled": "err-disabled",
       "native": "native {{vlan}}",
       "empty": "No interface data yet."
+    },
+    "events": "Events",
+    "tabs": {
+      "overview": "Overview",
+      "config": "Config"
     }
   },
   "discovery": {
@@ -339,5 +353,141 @@
   },
   "formats": {
     "dateTime": "YYYY-MM-DD HH:mm"
+  },
+  "filters": {
+    "device": "Device",
+    "range": "Time range",
+    "ranges": {
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "all": "All"
+    }
+  },
+  "configs": {
+    "title": "Configuration backups",
+    "subtitle": "Last backup, versions and changes made outside the platform, per managed device",
+    "search": "Search devices",
+    "columns": {
+      "device": "Device",
+      "lastBackup": "Last backup",
+      "status": "Last attempt",
+      "versions": "Versions",
+      "lastChange": "Last change",
+      "recentExternal": "External (last {{days}} days)"
+    },
+    "neverBackedUp": "Not backed up yet",
+    "externalCount_one": "{{count}} change",
+    "externalCount_other": "{{count}} changes",
+    "empty": {
+      "title": "No devices to back up",
+      "body": "The configurations of discovered, managed devices are backed up every night and after every change."
+    },
+    "history": "Version history",
+    "versionCount_one": "{{count}} version",
+    "versionCount_other": "{{count}} versions",
+    "noVersions": "This device has no backup yet. Use “Back up now” for the first one.",
+    "redaction": {
+      "secret": "hidden",
+      "certificate": "certificate hidden",
+      "hint": "A secret value (password, key or community). The platform never shows it.",
+      "notice": "Passwords, keys and SNMP communities are hidden; their lines are kept, so a diff still shows when a secret changed."
+    },
+    "origin": {
+      "external": "Change outside the platform",
+      "platform": "Platform",
+      "externalShort": "External"
+    },
+    "backup": {
+      "button": "Back up now",
+      "running": "Backing up…",
+      "done": "Backup taken.",
+      "failed": "Backup failed: {{error}}"
+    },
+    "timeline": {
+      "select": "Show the version of {{time}}",
+      "first": "First backup",
+      "unknownUser": "unknown user"
+    },
+    "viewer": {
+      "label": "Configuration",
+      "size": "{{size}} bytes",
+      "show": "View",
+      "compare": "Compare"
+    },
+    "diff": {
+      "add": "Added",
+      "del": "Removed",
+      "identical": "The two versions are identical.",
+      "addedCount_one": "+{{count}} line",
+      "addedCount_other": "+{{count}} lines",
+      "removedCount_one": "−{{count}} line",
+      "removedCount_other": "−{{count}} lines",
+      "split": "Side by side",
+      "unified": "Unified",
+      "mode": "Diff view",
+      "from": "Older version",
+      "to": "Newer version",
+      "needTwo": "Comparing needs at least two versions."
+    },
+    "changes": {
+      "title": "Changes",
+      "empty": "No changes recorded for this device.",
+      "when": "When",
+      "device": "Device",
+      "origin": "Origin",
+      "user": "User",
+      "sourceIp": "Source IP",
+      "commands": "Commands",
+      "diff": "Diff",
+      "showDiff": "Show diff",
+      "more_one": "+{{count}} more command",
+      "more_other": "+{{count}} more commands",
+      "fewer": "Show fewer",
+      "foundBy": {
+        "scheduled": "found by a scheduled backup",
+        "manual": "found by a manual backup",
+        "change_event": "reported by syslog",
+        "pre_change": "found by a pre-change backup",
+        "post_change": "found by a post-change backup"
+      },
+      "pageTitle": "Config changes",
+      "count_one": "{{count}} change",
+      "count_other": "{{count}} changes",
+      "none": "No changes match the filters.",
+      "userPlaceholder": "e.g. jdoe"
+    }
+  },
+  "events": {
+    "title": "Events",
+    "subtitle": "Syslog messages from the devices",
+    "count_one": "{{count}} event",
+    "count_other": "{{count}} events",
+    "live": "Live",
+    "severityFilter": "Severity",
+    "mnemonic": "Mnemonic",
+    "mnemonicPlaceholder": "e.g. LINK-3-UPDOWN",
+    "severity": {
+      "0": "Emergency",
+      "1": "Alert",
+      "2": "Critical",
+      "3": "Error",
+      "4": "Warning",
+      "5": "Notice",
+      "6": "Informational",
+      "7": "Debug"
+    },
+    "empty": {
+      "title": "No events",
+      "body": "Devices must send syslog to the platform (logging host); see docs/device-prerequisites.md."
+    },
+    "columns": {
+      "time": "Time",
+      "device": "Device",
+      "severity": "Severity",
+      "mnemonic": "Mnemonic",
+      "message": "Message",
+      "source": "Source IP"
+    }
   }
 }

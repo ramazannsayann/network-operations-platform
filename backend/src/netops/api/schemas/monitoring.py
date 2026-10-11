@@ -96,7 +96,10 @@ class Event(ApiModel):
     id: int
     received_at: AwareDatetime
     source_ip: IPvAnyAddress
-    device: DeviceRef | None = Field(description="NULL if the source is not a known device.")
+    device: DeviceRef | None = Field(
+        description="NULL if the device has been deleted since (the receiver stores events "
+        "from known devices only)."
+    )
     kind: EventKind
     facility: int | None = Field(ge=0, le=23, description="Syslog facility code (RFC 5424).")
     severity: int | None = Field(ge=0, le=7, description="0 emergency ... 7 debug (RFC 5424).")

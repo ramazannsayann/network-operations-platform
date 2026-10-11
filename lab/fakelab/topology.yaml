@@ -7,6 +7,9 @@
 name: fakelab
 domain: lab.example.net
 management_subnet: 10.255.0.0/24
+# The events service (syslog receiver) on the fakelab network: every device's
+# "logging host"; make fakelab-change sends the change scenarios' syslog there.
+syslog_host: 10.255.0.253
 
 vlans:
   - {id: 10, name: STAFF, subnet: 10.10.10.0/24}

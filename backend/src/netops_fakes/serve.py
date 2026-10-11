@@ -5,6 +5,8 @@
 The password comes from FAKELAB_PASSWORD (never from the command line), the username from
 FAKELAB_USERNAME (default ``netops-ro``). Devices with ``credentials: wrong`` accept no
 password at all. A device reachable through two addresses runs as two containers.
+Outputs follow the lab's current state: the topology file plus the changes in the state
+file FAKELAB_STATE (default /lab/state/topology.json, see netops_fakes.change).
 """
 
 import argparse
@@ -15,7 +17,7 @@ import sys
 from pathlib import Path
 
 from netops_fakes.device import lab_devices
-from netops_fakes.lab import build
+from netops_fakes.live import LiveLab
 from netops_fakes.topology import load
 
 logger = logging.getLogger("netops_fakes.serve")
@@ -26,8 +28,9 @@ async def serve(topology: Path, name: str, host: str, port: int) -> None:
     if not password:
         sys.exit("FAKELAB_PASSWORD is not set")
     username = os.environ.get("FAKELAB_USERNAME", "netops-ro")
-    lab = build(load(topology))
-    devices = lab_devices(lab, username, password, host=host, port=port)
+    state_file = Path(os.environ.get("FAKELAB_STATE", "/lab/state/topology.json"))
+    live = LiveLab(load(topology), state_file)
+    devices = lab_devices(live, username, password, host=host, port=port)
     if name not in devices:
         sys.exit(f"{name!r} is not a served device of {topology} ({', '.join(sorted(devices))})")
     device = devices[name]

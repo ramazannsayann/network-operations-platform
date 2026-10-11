@@ -1,9 +1,12 @@
 import { createBrowserRouter, Navigate } from 'react-router'
 
+import { ConfigChangesPage } from '../features/configs/ConfigChangesPage'
+import { ConfigsPage } from '../features/configs/ConfigsPage'
 import { DeviceDetailPage } from '../features/devices/DeviceDetailPage'
 import { DevicesPage } from '../features/devices/DevicesPage'
 import { DiscoveryPage } from '../features/discovery/DiscoveryPage'
 import { DiscoveryRunPage } from '../features/discovery/DiscoveryRunPage'
+import { EventsPage } from '../features/events/EventsPage'
 import { Layout } from './Layout'
 import { NotFound } from './NotFound'
 
@@ -23,6 +26,9 @@ export const routes = [
       { path: 'devices/:deviceId', element: <DeviceDetailPage /> },
       { path: 'discovery', element: <DiscoveryPage /> },
       { path: 'discovery/runs/:runId', element: <DiscoveryRunPage /> },
+      { path: 'configs', element: <ConfigsPage /> },
+      { path: 'config-changes', element: <ConfigChangesPage /> },
+      { path: 'events', element: <EventsPage /> },
       { path: '*', element: <NotFound /> },
     ],
   },

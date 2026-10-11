@@ -294,8 +294,8 @@ erDiagram
 | `collection_runs` | One row per collector execution: device, kind, trigger, status and timing; defines point-in-time state. |
 | `alarms` | Problems with a lifecycle (open → acknowledged → cleared), deduplicated per `dedup_key`. |
 | `incidents` | Groups of alarms attributed to one root cause by M6. |
-| `config_versions` | Distinct device configurations: Git commit, normalized-content hash, size (text is in Git). |
-| `config_changes` | Configuration changes made through the platform or outside it, with user, source IP and commands. |
+| `config_versions` | Distinct device configurations: Git commit, normalized-content hash, size; the text is in the local Git repository ([ADR-0007](adr/0007-config-management.md)). |
+| `config_changes` | Configuration changes made through the platform or outside it, with user, source IP and (redacted) commands; `detected_at` is the first syslog message of the change, or the backup that found it. |
 | `findings` | Diagnosis results: root-cause candidates with explanation, evidence chain and score. |
 
 ### Observations (hypertables)
@@ -313,7 +313,7 @@ erDiagram
 | `hsrp_observations` | `hsrp` | HSRP groups: virtual IP, state, priority, active and standby routers. |
 | `ospf_neighbor_observations` | `ospf` | OSPF adjacencies: neighbour router ID, address, interface, area, state. |
 | `metrics` | (SNMP poller) | Narrow time series: one numeric sample per device/interface, metric name and time. |
-| `events` | (syslog/trap receiver) | Raw syslog messages and SNMP traps with parsed fields. |
+| `events` | (syslog/trap receiver) | Syslog messages (later SNMP traps) from known devices with parsed fields; logged commands redacted. |
 
 Run kinds `facts` and `config` write no observation table: `facts` updates `devices` and
 `device_serials`; `config` writes `config_versions` when the configuration changed.

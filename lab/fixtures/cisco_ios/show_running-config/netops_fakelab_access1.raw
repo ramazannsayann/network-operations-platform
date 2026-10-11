@@ -1,0 +1,132 @@
+Building configuration...
+
+Current configuration : 2613 bytes
+!
+! Last configuration change at 09:00:00 UTC Mon Oct 5 2026 by admin
+! NVRAM config last updated at 09:00:00 UTC Mon Oct 5 2026 by admin
+!
+version 15.2
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+service sequence-numbers
+!
+hostname access1
+!
+boot-start-marker
+boot-end-marker
+!
+logging buffered 64000 informational
+no logging console
+enable secret 9 $9$FAKElabENABLE$NotARealHash.FakeLabEnableSecret.000000000001
+!
+aaa new-model
+!
+aaa group server tacacs+ LAB-TACACS
+ server name LAB-TACACS-1
+!
+aaa authentication login default group LAB-TACACS local
+aaa authorization exec default group LAB-TACACS local if-authenticated
+aaa accounting commands 15 default start-stop group LAB-TACACS
+!
+aaa session-id common
+clock timezone UTC 0 0
+!
+ip domain name lab.example.net
+!
+login on-success log
+!
+vtp mode transparent
+!
+spanning-tree mode rapid-pvst
+spanning-tree extend system-id
+!
+username admin privilege 15 secret 9 $9$FAKElabADMIN0$NotARealHash.FakeLabAdminSecret.0000000000002
+username netops-ro privilege 15 secret 9 $9$FAKElabREADER$NotARealHash.FakeLabReaderSecret.000000000003
+!
+vlan 10
+ name STAFF
+!
+vlan 20
+ name STUDENTS
+!
+vlan 30
+ name APS
+!
+vlan 98
+ name MGMT-B
+!
+vlan 99
+ name MGMT
+!
+interface GigabitEthernet1/0/1
+ description host 10.10.10.101
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet1/0/2
+ description host 10.10.20.101
+ switchport access vlan 20
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet1/0/3
+ description host 10.10.20.102
+ switchport access vlan 20
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet1/0/49
+ description to dist1 Gi1/0/1
+ switchport trunk allowed vlan 10,20,30,98-99
+ switchport mode trunk
+!
+interface Vlan99
+ description MGMT
+ ip address 10.255.0.21 255.255.255.224
+!
+ip default-gateway 10.255.0.1
+ip ssh version 2
+ip scp server enable
+!
+logging origin-id hostname
+logging source-interface Vlan99
+logging host 10.255.0.253
+!
+snmp-server community FAKE-lab-snmp-community-5 RO
+snmp-server location Fake lab, rack 1
+snmp-server contact netops-lab@example.net
+!
+tacacs server LAB-TACACS-1
+ address ipv4 192.0.2.49
+ key 7 FAKE7TACACS00006
+!
+banner motd ^C
+access1: fake lab device. Authorized use only.
+^C
+!
+line con 0
+ exec-timeout 15 0
+ stopbits 1
+line vty 0 4
+ exec-timeout 15 0
+ password 7 FAKE7LINE0000004
+ transport input ssh
+line vty 5 15
+ transport input ssh
+!
+ntp authentication-key 1 md5 FAKE7NTP00000007 7
+ntp authenticate
+ntp trusted-key 1
+ntp clock-period 36028747
+ntp server 192.0.2.123 key 1
+!
+archive
+ log config
+  logging enable
+  logging size 200
+  notify syslog contenttype plaintext
+  hidekeys
+!
+end

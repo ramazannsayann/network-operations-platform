@@ -25,8 +25,7 @@ from typing import Any
 
 import asyncssh
 
-from netops_fakes.lab import Lab
-from netops_fakes.render import render
+from netops_fakes.live import LiveLab, LiveOutputs
 from netops_fakes.topology import Credentials
 
 INVALID_INPUT = "                    ^\n% Invalid input detected at '^' marker.\n\n"
@@ -154,16 +153,16 @@ class _LoopThread:
 
 
 def lab_devices(
-    lab: Lab, username: str, password: str, *, host: str = "127.0.0.1", port: int = 0
+    live: LiveLab, username: str, password: str, *, host: str = "127.0.0.1", port: int = 0
 ) -> dict[str, FakeCiscoDevice]:
-    """One fake device per served device of ``lab``. Devices configured with
-    ``credentials: wrong`` get a random password nobody knows."""
+    """One fake device per served device of the lab, answering from its current state.
+    Devices configured with ``credentials: wrong`` get a random password nobody knows."""
     devices = {}
-    for state in lab.served():
+    for state in live.lab().served():
         lab_credentials = state.device.credentials is Credentials.LAB
         accepted = password if lab_credentials else secrets.token_urlsafe(24)
         devices[state.name] = FakeCiscoDevice(
-            state.name, username, accepted, render(lab, state), host=host, port=port
+            state.name, username, accepted, LiveOutputs(live, state.name), host=host, port=port
         )
     return devices
 
