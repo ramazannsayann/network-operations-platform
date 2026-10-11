@@ -34,8 +34,10 @@ app = typer.Typer(
 )
 credentials = typer.Typer(help="Device credential profiles (SSH).", no_args_is_help=True)
 devices = typer.Typer(help="Inventory.", no_args_is_help=True)
+configs = typer.Typer(help="Configuration backups (M4).", no_args_is_help=True)
 app.add_typer(credentials, name="credentials")
 app.add_typer(devices, name="devices")
+app.add_typer(configs, name="configs")
 
 
 def _db[T](work: Callable[[AsyncSession], Awaitable[T]]) -> T:
@@ -286,3 +288,56 @@ def devices_list(
     rows = _db(load)
     _table(rows, ["HOSTNAME", "MGMT IP", "TYPE", "ROLE", "STATUS", "MODEL", "SERIALS"])
     typer.echo(f"{len(rows)} devices")
+
+
+@configs.command("backup")
+def configs_backup(
+    device: Annotated[
+        str | None, typer.Option(help="Only this device (hostname or management address).")
+    ] = None,
+    inline: Annotated[
+        bool, typer.Option(help="Run here instead of on a worker (local tests only).")
+    ] = False,
+) -> None:
+    """Back up configurations now, as the scheduled backup does (trigger "scheduled")."""
+    from netops.configmgmt.tasks import managed_devices
+    from netops.db.enums import CollectionKind, CollectionTrigger
+
+    if device is None:
+        ids = asyncio.run(managed_devices())
+    else:
+
+        async def find(session: AsyncSession) -> list[uuid.UUID]:
+            found = await session.scalars(
+                select(Device.id).where(
+                    or_(Device.hostname == device, func.host(Device.mgmt_ip) == device)
+                )
+            )
+            return list(found)
+
+        ids = _db(find)
+        if not ids:
+            raise typer.BadParameter(f"no device {device!r}")
+    if inline:
+        from netops.inventory.service import collect_device
+
+        for device_id in ids:
+            outcome = asyncio.run(
+                collect_device(
+                    device_id, [CollectionKind.CONFIG], CollectionTrigger.SCHEDULED, get_settings()
+                )
+            )
+            typer.echo(f"{device_id}: {outcome}")
+        return
+    from netops.workers.celery_app import celery_app
+
+    for device_id in ids:
+        celery_app.send_task(
+            "netops.collect_device",
+            kwargs={
+                "device_id": str(device_id),
+                "kinds": [CollectionKind.CONFIG.value],
+                "trigger": CollectionTrigger.SCHEDULED.value,
+            },
+        )
+    typer.echo(f"Configuration backup queued for {len(ids)} devices.")

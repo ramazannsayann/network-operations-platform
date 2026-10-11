@@ -133,9 +133,13 @@ async def session(migrated_database: URL) -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
-def app_on_test_database(monkeypatch: pytest.MonkeyPatch, migrated_database: URL) -> Iterator[None]:
-    """Point netops' own settings (used by tasks and the API) at the test database."""
+def app_on_test_database(
+    monkeypatch: pytest.MonkeyPatch, migrated_database: URL, tmp_path: Path
+) -> Iterator[None]:
+    """Point netops' own settings (used by tasks and the API) at the test database, and the
+    configuration repository at a directory of the test's own."""
     for name, value in {
+        "CONFIG_REPO_PATH": tmp_path / "configs",
         "POSTGRES_HOST": migrated_database.host,
         "POSTGRES_PORT": migrated_database.port,
         "POSTGRES_USER": migrated_database.username,

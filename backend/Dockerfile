@@ -34,8 +34,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable --extra fakelab
 
 FROM ${BASE_REGISTRY}/library/python:3.12-slim-trixie AS fakelab
+# /lab/state: the shared state volume (changes applied by make fakelab-change); a new
+# named volume takes this directory's owner.
 RUN groupadd --system --gid 10001 netops \
-    && useradd --system --uid 10001 --gid netops --no-create-home netops
+    && useradd --system --uid 10001 --gid netops --no-create-home netops \
+    && install -d -o netops -g netops /lab/state
 COPY --from=build-fakelab /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
@@ -45,8 +48,11 @@ ENTRYPOINT ["python", "-m", "netops_fakes.serve"]
 
 # ---- runtime: no build tooling, runs as an unprivileged user (the default target) ----
 FROM ${BASE_REGISTRY}/library/python:3.12-slim-trixie AS runtime
+# /var/lib/netops/configs: the configuration repository (ADR-0007), a volume of its own;
+# complete configurations with secrets, so only the netops user may enter it.
 RUN groupadd --system --gid 10001 netops \
-    && useradd --system --uid 10001 --gid netops --no-create-home netops
+    && useradd --system --uid 10001 --gid netops --no-create-home netops \
+    && install -d -m 0700 -o netops -g netops /var/lib/netops/configs
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY alembic.ini ./

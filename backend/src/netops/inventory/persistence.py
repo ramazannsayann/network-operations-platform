@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from netops.configmgmt.changes import ChangeReport
 from netops.core.ifname import interface_kind
 from netops.db.enums import CollectionKind, CollectionStatus, CollectionTrigger, Reachability
 from netops.db.models import CollectionRun, Device, Interface, Observation
@@ -44,6 +45,8 @@ class Context:
     device: Device
     run: CollectionRun
     warnings: list[str] = field(default_factory=list)
+    # What syslog reported about the change that triggered this run (config runs only).
+    change_report: ChangeReport | None = None
     _interfaces: dict[str, Interface] | None = None
 
     @property
@@ -155,6 +158,7 @@ async def complete_run(
     run_id: uuid.UUID,
     outputs: Mapping[str, str],
     command_errors: Mapping[str, str] | None = None,
+    change_report: ChangeReport | None = None,
 ) -> CollectionStatus:
     """Parse the outputs of a started run, store them and finish the run."""
     # Fresh copies: an earlier kind's rollback may have expired the loaded objects.
@@ -170,7 +174,7 @@ async def complete_run(
     if not parsed or missing_required:
         return await fail_run(session, run_id, "\n".join(errors))
 
-    context = Context(session=session, device=device, run=run)
+    context = Context(session=session, device=device, run=run, change_report=change_report)
     try:
         await collector.persist(context, parsed)
         problems = errors + context.warnings

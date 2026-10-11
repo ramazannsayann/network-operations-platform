@@ -54,6 +54,38 @@ class Settings(BaseSettings):
     # Directory for Netmiko session logs (debugging only); passwords are redacted.
     ssh_session_log_dir: Path | None = None
 
+    # Configuration management (M4, ADR-0007). The repository holds complete configurations,
+    # secrets included: a local Git repository in its own volume, never pushed anywhere.
+    config_repo_path: Path = Path("/var/lib/netops/configs")
+    # When the scheduled backup runs: a cron expression (minute hour day month weekday, UTC).
+    config_backup_schedule: str = "30 2 * * *"
+    # A change window stays open while CONFIG_I / CFGLOG messages keep arriving: it closes
+    # this long after the last one (and at the latest after the maximum), then the device's
+    # configuration is collected.
+    config_change_debounce_seconds: float = Field(default=30.0, gt=0)
+    config_change_max_window_seconds: float = Field(default=300.0, gt=0)
+    # The account M5 will push changes with; changes made by it count as origin "platform".
+    platform_write_username: str | None = None
+
+    # Syslog receiver (the events service). Port 514 inside its container; the host port
+    # is set in deploy/.env (SYSLOG_HOST_PORT).
+    syslog_bind: str = "0.0.0.0"  # noqa: S104 - inside its container
+    syslog_port: int = Field(default=514, ge=1, le=65535)
+    syslog_max_datagram_bytes: int = Field(default=2048, ge=480, le=65507)
+    # Per source address: sustained messages per second and burst (token bucket).
+    syslog_rate_per_source: float = Field(default=50.0, gt=0)
+    syslog_burst_per_source: int = Field(default=200, ge=1)
+
+    @field_validator("config_backup_schedule")
+    @classmethod
+    def _cron(cls, value: str) -> str:
+        from celery.schedules import crontab
+
+        if len(value.split()) != 5:
+            raise ValueError("expected five cron fields: minute hour day month weekday")
+        crontab.from_string(value)  # raises ValueError on an invalid field
+        return value
+
     @field_validator("credentials_key")
     @classmethod
     def _valid_fernet_keys(cls, value: SecretStr) -> SecretStr:

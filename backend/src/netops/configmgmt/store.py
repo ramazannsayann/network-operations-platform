@@ -40,11 +40,14 @@ class ConfigStore:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def _repo(self) -> Repo:
-        if not (self.path / "HEAD").exists():
-            self._init()
-        # Complete configurations: nobody but the platform's user may read them.
-        os.chmod(self.path, 0o700)
+    def _repo(self, *, write: bool) -> Repo:
+        if write:
+            if not (self.path / "HEAD").exists():
+                self._init()
+            # Complete configurations: nobody but the platform's user may read them.
+            os.chmod(self.path, 0o700)
+        elif not (self.path / "HEAD").exists():
+            raise ConfigStoreError(f"no configuration repository at {self.path}")
         return Repo(str(self.path))
 
     def _init(self) -> None:
@@ -57,7 +60,7 @@ class ConfigStore:
 
     def commit(self, device_id: uuid.UUID, text: str, message: str, when: datetime) -> str:
         """Store ``text`` as the device's file in a new commit; returns the commit id."""
-        repo = self._repo()
+        repo = self._repo(write=True)
         # Workers on one host take turns; the compare-and-swap below is the safety net.
         with open(self.path / ".commit.lock", "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
@@ -99,8 +102,8 @@ class ConfigStore:
         raise ConfigStoreError("could not update the configuration repository")
 
     def read(self, commit_id: str, device_id: uuid.UUID) -> str:
-        """The device's configuration as of a commit."""
-        repo = self._repo()
+        """The device's configuration as of a commit (the api reads a read-only mount)."""
+        repo = self._repo(write=False)
         try:
             commit = repo[commit_id.encode()]
             tree = repo[commit.tree]  # type: ignore[attr-defined]

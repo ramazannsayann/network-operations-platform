@@ -9,11 +9,12 @@ from enum import StrEnum
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.pool import NullPool
 
+from netops.configmgmt.changes import ChangeReport
 from netops.core.settings import Settings
 from netops.db.enums import CollectionKind, CollectionStatus, CollectionTrigger, Reachability
 from netops.db.models import Device
 from netops.db.session import create_engine
-from netops.inventory.collectors import commands_for, kinds_for
+from netops.inventory.collectors import commands_for, kinds_for, supports
 from netops.inventory.locks import try_lock_device, try_take_ssh_slot
 from netops.inventory.persistence import complete_run, fail_run, start_run
 from netops.netaccess import DeviceAccessError, load_device_access, run_show
@@ -34,18 +35,20 @@ async def collect(
     kinds: Sequence[CollectionKind] | None,
     trigger: CollectionTrigger,
     settings: Settings,
+    change_report: ChangeReport | None = None,
 ) -> dict[CollectionKind, CollectionStatus]:
     """Run the collectors for ``kinds`` over one SSH session. Never raises for a device.
 
-    ``kinds`` defaults to what the device's type supports (collectors.kinds_for); kinds the
-    type does not have (VLANs on a router) are left out.
+    ``kinds`` defaults to what the device's type collects by default (collectors.kinds_for);
+    kinds the type does not have (VLANs on a router) are left out. ``change_report``: what
+    syslog said about the change that triggered a config collection.
     """
     async with sessions() as session:
         device = await session.get(Device, device_id)
         if device is None:
             raise LookupError(f"device {device_id} does not exist")
-        supported = kinds_for(device.device_type)
-        kinds = [kind for kind in kinds or supported if kind in supported]
+        requested = kinds or kinds_for(device.device_type)
+        kinds = [kind for kind in requested if supports(device.device_type, kind)]
         runs = {kind: await start_run(session, device_id, kind, trigger) for kind in kinds}
 
         try:
@@ -70,7 +73,7 @@ async def collect(
         statuses = {}
         for kind, run_id in runs.items():
             statuses[kind] = await complete_run(
-                session, device_id, run_id, result.outputs, result.command_errors
+                session, device_id, run_id, result.outputs, result.command_errors, change_report
             )
         logger.info(
             "device collected",
@@ -84,6 +87,7 @@ async def collect_device(
     kinds: Sequence[CollectionKind] | None,
     trigger: CollectionTrigger,
     settings: Settings,
+    change_report: ChangeReport | None = None,
 ) -> dict[CollectionKind, CollectionStatus] | Busy:
     """``collect`` behind the per-device lock and the global SSH session limit."""
     engine = create_engine(settings.database_url, poolclass=NullPool)
@@ -95,7 +99,7 @@ async def collect_device(
             if await try_take_ssh_slot(locks, settings.ssh_max_concurrency) is None:
                 return Busy.NO_SSH_SLOT
             sessions = async_sessionmaker(engine, expire_on_commit=False)
-            return await collect(sessions, device_id, kinds, trigger, settings)
+            return await collect(sessions, device_id, kinds, trigger, settings, change_report)
             # Closing the connection releases both locks.
     finally:
         await engine.dispose()

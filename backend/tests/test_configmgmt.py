@@ -399,3 +399,47 @@ def test_context_lines_are_redacted_too() -> None:
     diff = redacted_diff(config, config.replace("ssh", "ssh telnet"), from_label="a", to_label="b")
     assert f"  password 7 {MARKER}" in diff.text.splitlines()
     assert "FAKE" not in diff.text
+
+
+# --- backups ---------------------------------------------------------------------------------
+
+
+def test_commit_message_names_device_trigger_and_user() -> None:
+    import uuid
+
+    from netops.configmgmt.backup import TRIGGERS, commit_message
+    from netops.configmgmt.changes import ChangeReport
+    from netops.db.enums import CollectionTrigger, ConfigTrigger
+    from netops.db.models import Device
+
+    device = Device(id=uuid.uuid4(), hostname="dist1", mgmt_ip="10.255.0.11")
+    report = ChangeReport(
+        username="jdoe",
+        source_ip="192.0.2.77",
+        line="vty0",
+        commands=("interface Gi1/0/2", "snmp-server community FakeCommunity9 RO"),
+    )
+    message = commit_message(device, ConfigTrigger.CHANGE_EVENT, report, first=False)
+    assert message.splitlines()[0] == "dist1: new configuration (change_event)"
+    assert f"Device: dist1 (10.255.0.11, {device.id})" in message
+    assert "Changed by: jdoe from 192.0.2.77 on vty0" in message
+    assert "snmp-server community <redacted> RO" in message
+    assert "FakeCommunity9" not in message
+    unreported = commit_message(device, ConfigTrigger.SCHEDULED, None, first=False)
+    assert "Changed by: unknown (no syslog report)" in unreported
+    first = commit_message(device, ConfigTrigger.SCHEDULED, None, first=True)
+    assert first.startswith("dist1: first backup (scheduled)")
+    assert "Changed by" not in first
+    assert set(TRIGGERS) == set(CollectionTrigger)
+    assert TRIGGERS[CollectionTrigger.EVENT] is ConfigTrigger.CHANGE_EVENT
+
+
+def test_config_backups_run_only_on_request() -> None:
+    from netops.db.enums import CollectionKind, DeviceType
+    from netops.inventory.collectors import DEFAULT_KINDS, kinds_for, supports
+
+    assert CollectionKind.CONFIG not in DEFAULT_KINDS
+    for device_type in DeviceType:
+        assert CollectionKind.CONFIG not in kinds_for(device_type)
+        assert supports(device_type, CollectionKind.CONFIG)
+    assert not supports(DeviceType.ROUTER, CollectionKind.VLANS)
