@@ -26,6 +26,14 @@ for (const scheme of ['light', 'dark'] as const) {
       await settle(page)
       await page.screenshot({ path: `${OUT}/map-l3-${scheme}.png` })
 
+      await page.getByText('L2 (fiziksel)').click()
+      await page.getByRole('button', { name: /Zaman/ }).click()
+      await page.getByRole('button', { name: '1 saat önce' }).click()
+      await expect(page.getByTestId('historic-banner')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await settle(page)
+      await page.screenshot({ path: `${OUT}/map-history-${scheme}.png` })
+
       await page.goto('/devices')
       await expect(page.getByRole('row').filter({ hasText: 'core1' })).toBeVisible()
       await settle(page)

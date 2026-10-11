@@ -174,7 +174,7 @@ export function DeviceDetailPage() {
         <Stack gap={4}>
           <Title order={2}>{d.hostname ?? d.mgmt_ip ?? d.id}</Title>
           <Group gap="xs">
-            <ManagementStatusBadge status={d.management_status} />
+            <ManagementStatusBadge status={d.management_status} seenVia={d.discovered_via} />
             <Badge variant="outline">{t(`enums.deviceType.${d.device_type}`)}</Badge>
             <Badge variant="outline">{t(`enums.role.${d.role}`)}</Badge>
           </Group>

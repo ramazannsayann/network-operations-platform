@@ -50,7 +50,7 @@
       "out_of_scope": "Out of scope",
       "auth_failed": "Authentication failed",
       "unreachable": "Unreachable",
-      "unsupported_platform": "Unsupported platform",
+      "unsupported_platform": "Endpoint (seen via CDP/LLDP)",
       "manual": "Added manually"
     },
     "deviceType": {
@@ -82,7 +82,7 @@
       "auth_failed": "Authentication failed",
       "unreachable": "Unreachable",
       "out_of_scope": "Out of scope",
-      "unsupported_platform": "Unsupported platform",
+      "unsupported_platform": "Endpoint (not logged in to)",
       "no_mgmt_ip": "No management address"
     },
     "collectionKind": {
@@ -270,7 +270,6 @@
     "role": "Role",
     "location": "Location",
     "at": "Time",
-    "atHelp": "Show the network as it was",
     "now": "Now",
     "saveLayout": "Save layout",
     "autoLayout": "Automatic layout",
@@ -278,7 +277,6 @@
     "layoutReset": "Back to the automatic layout.",
     "changes": "Changes",
     "summary": "{{nodes}} nodes, {{edges}} links",
-    "historic": "Showing the state at {{time}}.",
     "empty": {
       "title": "No devices to show",
       "body": "Run a discovery to see the network on the map.",
@@ -286,14 +284,20 @@
     },
     "legend": {
       "title": "Legend",
-      "managed": "Managed device (solid border)",
-      "outOfScope": "Out of scope (dashed, faded)",
-      "authFailed": "Authentication failed (red, double border)",
-      "unreachable": "Unreachable (orange, dashed)",
-      "unsupported": "Unsupported platform / AP (dotted)",
-      "etherchannel": "EtherChannel (thick line, member count)",
-      "subnet": "Subnet (L3)",
-      "shapes": "Shape: router ◆, L3 switch ■, switch ▬, AP ▲"
+      "managed": "Managed device: solid border",
+      "outOfScope": "Out of scope: dashed border, faded",
+      "authFailed": "Authentication failed: red double border",
+      "unreachable": "Unreachable: orange dashed border",
+      "endpoint": "Endpoint (AP etc., seen via CDP/LLDP): thin grey border",
+      "etherchannel": "EtherChannel: thick line, member count",
+      "subnet": "Subnet: label with the gateway (GW)",
+      "hsrpActive": "Thick green: HSRP active gateway",
+      "hsrpStandby": "Dashed green: HSRP standby",
+      "member": "Thin grey: subnet membership",
+      "types": "Device types",
+      "states": "States",
+      "links": "Links",
+      "hover": "Hover a link for ports and HSRP details."
     },
     "panel": {
       "title": "Selected node",
@@ -311,6 +315,29 @@
       "none": "No changes in this period.",
       "note": "If a link disappears and comes back, only its latest state shows."
     },
-    "fit": "Fit the map"
+    "fit": "Fit the map",
+    "caption": {
+      "out_of_scope": "out of scope",
+      "auth_failed": "authentication failed",
+      "unreachable": "unreachable",
+      "unsupported_platform": "endpoint"
+    },
+    "management": "Management subnets",
+    "managementHelp": "Show the subnets that hold devices' management addresses",
+    "presets": {
+      "now": "Now",
+      "minutes15": "15 min ago",
+      "hour1": "1 hour ago",
+      "yesterday": "Yesterday, this time"
+    },
+    "historicBanner": "Historical view: {{time}}",
+    "backToNow": "Back to now",
+    "gateway": "GW"
+  },
+  "status": {
+    "endpointVia": "Endpoint (seen via {{protocol}})"
+  },
+  "formats": {
+    "dateTime": "YYYY-MM-DD HH:mm"
   }
 }

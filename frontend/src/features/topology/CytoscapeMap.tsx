@@ -1,5 +1,6 @@
+import { Paper, Text } from '@mantine/core'
 import cytoscape from 'cytoscape'
-import { type Ref, useEffect, useImperativeHandle, useRef } from 'react'
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
 import type { MapElements, Position } from './elements'
 import { stylesheet } from './style'
@@ -22,6 +23,24 @@ interface Props {
   ref?: Ref<MapController>
 }
 
+const PADDING = 48
+// Small graphs would otherwise be blown up to fill the canvas.
+const MAX_FIT_ZOOM = 1.5
+
+function fit(instance: cytoscape.Core) {
+  instance.fit(undefined, PADDING)
+  if (instance.zoom() > MAX_FIT_ZOOM) {
+    instance.zoom(MAX_FIT_ZOOM)
+    instance.center()
+  }
+}
+
+interface Tooltip {
+  x: number
+  y: number
+  text: string
+}
+
 export function CytoscapeMap({
   elements,
   positions,
@@ -31,17 +50,22 @@ export function CytoscapeMap({
   label,
   ref,
 }: Props) {
+  const wrapper = useRef<HTMLDivElement>(null)
   const container = useRef<HTMLDivElement>(null)
   const cy = useRef<cytoscape.Core | null>(null)
+  const [tooltip, setTooltip] = useState<Tooltip | null>(null)
   const onSelectRef = useRef(onSelect)
   useEffect(() => {
     onSelectRef.current = onSelect
   }, [onSelect])
 
+  const canvasColor = () =>
+    (wrapper.current && getComputedStyle(wrapper.current).backgroundColor) || '#ffffff'
+
   useEffect(() => {
     const instance = cytoscape({
       container: container.current,
-      style: stylesheet(scheme),
+      style: stylesheet(scheme, canvasColor()),
       layout: { name: 'preset' },
       minZoom: 0.15,
       maxZoom: 3,
@@ -53,14 +77,28 @@ export function CytoscapeMap({
     instance.on('tap', (event) => {
       if (event.target === instance) onSelectRef.current(null)
     })
-    instance.on('mouseover', 'edge', (event: cytoscape.EventObjectEdge) => {
-      event.target.addClass('hover')
-    })
-    instance.on('mouseout', 'edge', (event: cytoscape.EventObjectEdge) => {
+    const show = (event: cytoscape.EventObjectNode | cytoscape.EventObjectEdge) => {
+      const text = event.target.data('tooltip') as string
+      if (event.target.isEdge()) event.target.addClass('hover')
+      if (text) setTooltip({ x: event.renderedPosition.x, y: event.renderedPosition.y, text })
+    }
+    const hide = (event: cytoscape.EventObjectNode | cytoscape.EventObjectEdge) => {
       event.target.removeClass('hover')
+      setTooltip(null)
+    }
+    instance.on('mouseover', 'node, edge', show)
+    instance.on('mouseout', 'node, edge', hide)
+    instance.on('viewport drag', () => {
+      setTooltip(null)
     })
     cy.current = instance
+    // Cytoscape measures its container once; follow later size changes (side panel).
+    const observer = new ResizeObserver(() => {
+      instance.resize()
+    })
+    if (container.current) observer.observe(container.current)
     return () => {
+      observer.disconnect()
       instance.destroy()
       cy.current = null
     }
@@ -87,11 +125,13 @@ export function CytoscapeMap({
         })),
       ])
     })
-    instance.fit(undefined, 40)
+    instance.resize()
+    fit(instance)
+    setTooltip(null)
   }, [elements, positions])
 
   useEffect(() => {
-    cy.current?.style(stylesheet(scheme))
+    cy.current?.style(stylesheet(scheme, canvasColor()))
   }, [scheme])
 
   useEffect(() => {
@@ -117,7 +157,7 @@ export function CytoscapeMap({
         }
       },
       fit: () => {
-        cy.current?.fit(undefined, 40)
+        if (cy.current) fit(cy.current)
       },
     }),
     [],
@@ -125,11 +165,43 @@ export function CytoscapeMap({
 
   return (
     <div
-      ref={container}
-      role="img"
-      aria-label={label}
-      data-testid="topology-map"
-      style={{ width: '100%', height: '100%', minHeight: 420 }}
-    />
+      ref={wrapper}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        minHeight: 420,
+        background: 'var(--mantine-color-body)',
+      }}
+    >
+      <div
+        ref={container}
+        role="img"
+        aria-label={label}
+        data-testid="topology-map"
+        style={{ position: 'absolute', inset: 0 }}
+      />
+      {tooltip && (
+        <Paper
+          shadow="md"
+          withBorder
+          px="xs"
+          py={4}
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            left: tooltip.x + 14,
+            top: tooltip.y + 14,
+            pointerEvents: 'none',
+            zIndex: 5,
+            maxWidth: 360,
+          }}
+        >
+          <Text size="xs" className="mono" style={{ whiteSpace: 'pre-line' }}>
+            {tooltip.text}
+          </Text>
+        </Paper>
+      )}
+    </div>
   )
 }

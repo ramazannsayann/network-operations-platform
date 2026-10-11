@@ -277,7 +277,10 @@ export function DevicesPage() {
                     <Table.Td>{t(`enums.deviceType.${device.device_type}`)}</Table.Td>
                     <Table.Td>{t(`enums.role.${device.role}`)}</Table.Td>
                     <Table.Td>
-                      <ManagementStatusBadge status={device.management_status} />
+                      <ManagementStatusBadge
+                        status={device.management_status}
+                        seenVia={device.discovered_via}
+                      />
                     </Table.Td>
                     <Table.Td>{device.model ?? t('common.none')}</Table.Td>
                     <Table.Td className="mono">

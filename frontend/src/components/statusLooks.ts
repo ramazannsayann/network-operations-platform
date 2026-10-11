@@ -2,11 +2,11 @@
 import type { MantineColor } from '@mantine/core'
 import {
   IconAlertTriangle,
-  IconBan,
   IconCheck,
   IconCircleCheck,
   IconClock,
   IconCopy,
+  IconDevices,
   IconHandStop,
   IconLoader2,
   IconLock,
@@ -29,7 +29,8 @@ export const MANAGEMENT_STATUS: Record<Schemas['ManagementStatus'], Look> = {
   out_of_scope: { color: 'gray', icon: IconWorldOff },
   auth_failed: { color: 'red', icon: IconLock },
   unreachable: { color: 'orange', icon: IconPlugConnectedX },
-  unsupported_platform: { color: 'grape', icon: IconBan },
+  // Not logging in to APs and other endpoints is by design: neutral, not a warning.
+  unsupported_platform: { color: 'gray', icon: IconDevices },
   manual: { color: 'blue', icon: IconHandStop },
 }
 
@@ -42,12 +43,12 @@ export const JOB_STATUS: Record<Schemas['JobStatus'], Look> = {
 
 export const ITEM_STATUS: Record<Schemas['DiscoveryItemStatus'], Look> = {
   discovered: { color: 'teal', icon: IconCircleCheck },
-  duplicate: { color: 'cyan', icon: IconCopy },
+  duplicate: { color: 'blue', icon: IconCopy },
   auth_failed: { color: 'red', icon: IconLock },
   unreachable: { color: 'orange', icon: IconPlugConnectedX },
   out_of_scope: { color: 'gray', icon: IconWorldOff },
-  unsupported_platform: { color: 'grape', icon: IconBan },
-  no_mgmt_ip: { color: 'yellow', icon: IconQuestionMark },
+  unsupported_platform: { color: 'gray', icon: IconDevices },
+  no_mgmt_ip: { color: 'gray', icon: IconQuestionMark },
 }
 
 export const COLLECTION_STATUS: Record<Schemas['CollectionStatus'], Look> = {

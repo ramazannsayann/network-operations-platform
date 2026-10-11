@@ -28,6 +28,9 @@ import { groupItems } from './groups'
 
 type Item = Schemas['DiscoveryRunItem']
 
+/** Only failures are shown in red; duplicates and skipped neighbours are normal outcomes. */
+const FAILURES: Schemas['DiscoveryItemStatus'][] = ['auth_failed', 'unreachable']
+
 function DeviceLink({ device }: { device: Schemas['DeviceRef'] | null | undefined }) {
   const { t } = useTranslation()
   if (!device) return <>{t('common.none')}</>
@@ -97,7 +100,11 @@ function ItemTable({ items }: { items: Item[] }) {
               </Table.Td>
               <Table.Td>{item.attempts}</Table.Td>
               <Table.Td>
-                <Text size="sm" c={item.error ? 'red' : 'dimmed'} title={item.error ?? undefined}>
+                <Text
+                  size="sm"
+                  c={FAILURES.includes(item.status) ? 'red' : 'dimmed'}
+                  title={item.error ?? undefined}
+                >
                   {note(item)}
                 </Text>
               </Table.Td>

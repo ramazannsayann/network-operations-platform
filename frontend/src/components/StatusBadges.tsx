@@ -23,11 +23,23 @@ function StatusBadge({ look, label }: { look: Look; label: string }) {
   )
 }
 
-export function ManagementStatusBadge({ status }: { status: Schemas['ManagementStatus'] }) {
+/**
+ * A device's management status. Devices discovery deliberately does not log in to (APs,
+ * phones: ``unsupported_platform``) read as "endpoint seen via CDP/LLDP", in a neutral colour.
+ */
+export function ManagementStatusBadge({
+  status,
+  seenVia,
+}: {
+  status: Schemas['ManagementStatus']
+  seenVia?: Schemas['DiscoverySource']
+}) {
   const { t } = useTranslation()
-  return (
-    <StatusBadge look={MANAGEMENT_STATUS[status]} label={t(`enums.managementStatus.${status}`)} />
-  )
+  const label =
+    status === 'unsupported_platform' && (seenVia === 'cdp' || seenVia === 'lldp')
+      ? t('status.endpointVia', { protocol: seenVia.toUpperCase() })
+      : t(`enums.managementStatus.${status}`)
+  return <StatusBadge look={MANAGEMENT_STATUS[status]} label={label} />
 }
 
 export function JobStatusBadge({ status }: { status: Schemas['JobStatus'] }) {

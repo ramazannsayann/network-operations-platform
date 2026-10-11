@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   Anchor,
   Badge,
   Button,
@@ -13,16 +14,20 @@ import {
   ScrollArea,
   SegmentedControl,
   Select,
+  SimpleGrid,
   Stack,
+  Switch,
   Text,
-  TextInput,
   Title,
   Tooltip,
   UnstyledButton,
   useComputedColorScheme,
 } from '@mantine/core'
+import { DateTimePicker } from '@mantine/dates'
+import { useViewportSize } from '@mantine/hooks'
 import {
   IconArrowsMaximize,
+  IconClockHour4,
   IconDeviceFloppy,
   IconExternalLink,
   IconHistory,
@@ -32,6 +37,7 @@ import {
   IconTopologyStar3,
   IconX,
 } from '@tabler/icons-react'
+import dayjs from 'dayjs'
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -50,23 +56,34 @@ import { EmptyState } from '../../components/EmptyState'
 import { ProblemAlert } from '../../components/ProblemAlert'
 import { RelativeTime } from '../../components/RelativeTime'
 import { ManagementStatusBadge } from '../../components/StatusBadges'
-import { dateTime } from '../../lib/format'
 import { CytoscapeMap, type MapController } from './CytoscapeMap'
 import {
   layoutByRole,
+  MAP_DEVICE_TYPES,
   mergePositions,
   shortPort,
   type Topology,
   toElements,
+  withoutManagementSubnets,
   withStatusCaptions,
 } from './elements'
+import { NODE_ICONS } from './icons'
 
 const ROLES: Schemas['DeviceRole'][] = ['edge', 'core', 'distribution', 'access', 'unknown']
+/** DateTimePicker values: local time as "YYYY-MM-DD HH:mm:ss". */
+const PICKER_FORMAT = 'YYYY-MM-DD HH:mm:ss'
 
-/** "2026-10-10T08:30" (datetime-local) for a Date, in local time. */
-function toLocalInput(date: Date): string {
-  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return shifted.toISOString().slice(0, 16)
+function timePresets(t: (key: string) => string) {
+  const now = dayjs()
+  return [
+    { value: null, label: t('topology.presets.now') },
+    {
+      value: now.subtract(15, 'minute').format(PICKER_FORMAT),
+      label: t('topology.presets.minutes15'),
+    },
+    { value: now.subtract(1, 'hour').format(PICKER_FORMAT), label: t('topology.presets.hour1') },
+    { value: now.subtract(1, 'day').format(PICKER_FORMAT), label: t('topology.presets.yesterday') },
+  ]
 }
 
 function NodePanel({
@@ -83,6 +100,18 @@ function NodePanel({
   if (!node) return null
   const labels = new Map(topology.nodes.map((candidate) => [candidate.id, candidate.label]))
   const edges = topology.edges.filter((edge) => edge.source === nodeId || edge.target === nodeId)
+  const line = (edge: Schemas['TopologyEdge']): string => {
+    const outgoing = edge.source === nodeId
+    if (edge.kind === 'subnet_member') {
+      const port = edge.source_interface ? shortPort(edge.source_interface.name) : ''
+      return outgoing
+        ? `${port} ${edge.address ?? ''} → ${labels.get(edge.target) ?? '?'}`
+        : `${labels.get(edge.source) ?? '?'} ${port} ${edge.address ?? ''}`
+    }
+    const local = outgoing ? edge.source_interface : edge.target_interface
+    const remote = outgoing ? edge.target_interface : edge.source_interface
+    return `${shortPort(local?.name)} → ${labels.get(outgoing ? edge.target : edge.source) ?? '?'} ${shortPort(remote?.name)}`
+  }
   return (
     <Paper withBorder p="md" h="100%" component="aside" aria-label={t('topology.panel.title')}>
       <Group justify="space-between" mb="xs" wrap="nowrap">
@@ -136,40 +165,38 @@ function NodePanel({
         )}
         <ScrollArea.Autosize mah={360}>
           <List size="sm" spacing={4}>
-            {edges.map((edge) => {
-              const outgoing = edge.source === nodeId
-              const local = outgoing ? edge.source_interface : edge.target_interface
-              const remote = outgoing ? edge.target_interface : edge.source_interface
-              const other = labels.get(outgoing ? edge.target : edge.source) ?? '?'
-              return (
-                <List.Item key={edge.id}>
-                  <span className="mono">
-                    {edge.kind === 'subnet_member'
-                      ? `${shortPort(edge.source_interface?.name ?? '')} ${edge.address ?? ''} → ${outgoing ? other : (labels.get(edge.source) ?? '')}`
-                      : `${shortPort(local?.name)} → ${other} ${shortPort(remote?.name)}`}
-                  </span>
-                  {edge.kind === 'etherchannel' && (
-                    <Text span size="xs" c="dimmed">
-                      {' '}
-                      ({t('topology.panel.members')}:{' '}
-                      {edge.members
-                        .map((member) =>
-                          shortPort(
-                            (outgoing ? member.source_interface : member.target_interface).name,
-                          ),
-                        )
-                        .join(', ')}
+            {edges.map((edge) => (
+              <List.Item key={edge.id}>
+                <span className="mono">{line(edge)}</span>
+                {edge.kind === 'etherchannel' && (
+                  <Text span size="xs" c="dimmed">
+                    {' '}
+                    ({t('topology.panel.members')}:{' '}
+                    {edge.members
+                      .map((member) =>
+                        shortPort(
+                          (edge.source === nodeId
+                            ? member.source_interface
+                            : member.target_interface
+                          ).name,
+                        ),
                       )
-                    </Text>
-                  )}
-                  {edge.hsrp_state && (
-                    <Badge size="xs" ml={4} variant="light">
-                      HSRP {edge.hsrp_state}
-                    </Badge>
-                  )}
-                </List.Item>
-              )
-            })}
+                      .join(', ')}
+                    )
+                  </Text>
+                )}
+                {edge.hsrp_state && (
+                  <Badge
+                    size="xs"
+                    ml={4}
+                    variant={edge.hsrp_state === 'active' ? 'filled' : 'light'}
+                    color="teal"
+                  >
+                    HSRP {edge.hsrp_state}
+                  </Badge>
+                )}
+              </List.Item>
+            ))}
           </List>
         </ScrollArea.Autosize>
       </Stack>
@@ -179,8 +206,10 @@ function NodePanel({
 
 function ChangesDrawer({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t } = useTranslation()
-  const [since, setSince] = useState(() => toLocalInput(new Date(Date.now() - 7 * 86_400_000)))
-  const sinceIso = useMemo(() => new Date(since).toISOString(), [since])
+  const [since, setSince] = useState<string | null>(() =>
+    dayjs().subtract(7, 'day').format(PICKER_FORMAT),
+  )
+  const sinceIso = useMemo(() => dayjs(since ?? undefined).toISOString(), [since])
   const changes = useTopologyChanges(sinceIso)
   const data = changes.data
   const link = (change: Schemas['LinkChange']) =>
@@ -223,13 +252,12 @@ function ChangesDrawer({ opened, onClose }: { opened: boolean; onClose: () => vo
       size="md"
     >
       <Stack gap="md">
-        <TextInput
-          type="datetime-local"
+        <DateTimePicker
           label={t('topology.changesPanel.since')}
+          valueFormat={t('formats.dateTime')}
           value={since}
-          onChange={(event) => {
-            if (event.currentTarget.value) setSince(event.currentTarget.value)
-          }}
+          onChange={setSince}
+          maxDate={dayjs().format(PICKER_FORMAT)}
         />
         {changes.isError && <ProblemAlert error={changes.error} />}
         {data && empty && <Text c="dimmed">{t('topology.changesPanel.none')}</Text>}
@@ -260,25 +288,18 @@ function ChangesDrawer({ opened, onClose }: { opened: boolean; onClose: () => vo
   )
 }
 
-function Legend() {
+function Legend({ layer }: { layer: Layer }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const items = [
-    'managed',
-    'outOfScope',
-    'authFailed',
-    'unreachable',
-    'unsupported',
-    'etherchannel',
-    'subnet',
-    'shapes',
-  ]
+  const states = ['managed', 'outOfScope', 'endpoint', 'authFailed', 'unreachable']
+  const links =
+    layer === 'l2' ? ['etherchannel'] : ['hsrpActive', 'hsrpStandby', 'member', 'subnet']
   return (
     <Paper
       withBorder
       shadow="xs"
       p="xs"
-      style={{ position: 'absolute', left: 8, bottom: 8, zIndex: 1, maxWidth: 340, opacity: 0.95 }}
+      style={{ position: 'absolute', left: 8, bottom: 8, zIndex: 2, maxWidth: 420, opacity: 0.96 }}
     >
       <UnstyledButton
         onClick={() => {
@@ -291,12 +312,46 @@ function Legend() {
         </Text>
       </UnstyledButton>
       <Collapse expanded={open}>
-        <Stack gap={2} mt={4}>
-          {items.map((item) => (
-            <Text key={item} size="xs" c="dimmed">
-              {t(`topology.legend.${item}`)}
+        <Stack gap={6} mt={6}>
+          <div>
+            <Text size="xs" fw={600}>
+              {t('topology.legend.types')}
             </Text>
-          ))}
+            <SimpleGrid cols={3} spacing={4} verticalSpacing={2}>
+              {[...MAP_DEVICE_TYPES, 'unknown'].map((type) => {
+                const IconComponent = NODE_ICONS[type] ?? IconTopologyStar3
+                return (
+                  <Group key={type} gap={4} wrap="nowrap">
+                    <IconComponent size={14} aria-hidden />
+                    <Text size="xs">{t(`enums.deviceType.${type}`)}</Text>
+                  </Group>
+                )
+              })}
+            </SimpleGrid>
+          </div>
+          <div>
+            <Text size="xs" fw={600}>
+              {t('topology.legend.states')}
+            </Text>
+            {states.map((item) => (
+              <Text key={item} size="xs" c="dimmed">
+                {t(`topology.legend.${item}`)}
+              </Text>
+            ))}
+          </div>
+          <div>
+            <Text size="xs" fw={600}>
+              {t('topology.legend.links')}
+            </Text>
+            {links.map((item) => (
+              <Text key={item} size="xs" c="dimmed">
+                {t(`topology.legend.${item}`)}
+              </Text>
+            ))}
+            <Text size="xs" c="dimmed" fs="italic">
+              {t('topology.legend.hover')}
+            </Text>
+          </div>
         </Stack>
       </Collapse>
     </Paper>
@@ -304,13 +359,15 @@ function Legend() {
 }
 
 export function TopologyPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const scheme = useComputedColorScheme('light')
+  const viewport = useViewportSize()
   const map = useRef<MapController>(null)
   const [layer, setLayer] = useState<Layer>('l2')
   const [roles, setRoles] = useState<string[]>([])
   const [location, setLocation] = useState<string | null>(null)
-  const [at, setAt] = useState('')
+  const [at, setAt] = useState<string | null>(null)
+  const [showManagement, setShowManagement] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
   const [changesOpen, setChangesOpen] = useState(false)
   const [notice, setNotice] = useState('')
@@ -319,30 +376,35 @@ export function TopologyPage() {
     layer,
     ...(roles.length > 0 ? { role: roles as Schemas['DeviceRole'][] } : {}),
     ...(location ? { location_id: location } : {}),
-    ...(at ? { at: new Date(at).toISOString() } : {}),
+    ...(at ? { at: dayjs(at).toISOString() } : {}),
   }
   const topology = useTopology(query)
   const layout = useLayout(layer)
   const saveLayout = useSaveLayout(layer)
   const locations = useLocations()
 
-  const elements = useMemo(
-    () =>
-      topology.data
-        ? withStatusCaptions(toElements(topology.data), (status) =>
-            t(`enums.managementStatus.${status}`),
-          )
-        : { nodes: [], edges: [] },
-    [topology.data, t],
-  )
+  const elements = useMemo(() => {
+    if (!topology.data) return { nodes: [], edges: [] }
+    const all = withStatusCaptions(toElements(topology.data), (status) =>
+      t(`topology.caption.${status}`),
+    )
+    return layer === 'l3' && !showManagement ? withoutManagementSubnets(all) : all
+  }, [topology.data, t, layer, showManagement])
+  // The canvas's shape (rounded, so a resize does not re-run the layout for every pixel).
+  const aspect = Math.round(((viewport.width - 300) / Math.max(1, viewport.height - 300)) * 4) / 4
   const positions = useMemo(
-    () => mergePositions(layoutByRole(elements), layout.data?.positions ?? []),
-    [elements, layout.data],
+    () =>
+      mergePositions(
+        layoutByRole(elements, Math.max(1, Math.min(aspect || 2, 3))),
+        layout.data?.positions ?? [],
+      ),
+    [elements, layout.data, aspect],
   )
   const nodeCount = elements.nodes.length
   const edgeCount = elements.edges.length
   const summary = t('topology.summary', { nodes: nodeCount, edges: edgeCount })
-  const filtered = roles.length > 0 || location !== null || at !== ''
+  const filtered = roles.length > 0 || location !== null || at !== null
+  const hasManagementSubnets = (topology.data?.nodes ?? []).some((node) => node.management_subnet)
 
   const searchData = elements.nodes.map(({ data }) => ({
     value: data.id,
@@ -384,7 +446,7 @@ export function TopologyPage() {
               setSelected(value)
               if (value) map.current?.focus(value)
             }}
-            w={230}
+            w={220}
           />
           <MultiSelect
             label={t('topology.role')}
@@ -393,7 +455,7 @@ export function TopologyPage() {
             value={roles}
             onChange={setRoles}
             clearable
-            w={220}
+            w={200}
           />
           <Select
             label={t('topology.location')}
@@ -406,33 +468,31 @@ export function TopologyPage() {
             onChange={setLocation}
             clearable
             searchable
-            w={180}
+            w={170}
           />
-          <TextInput
-            type="datetime-local"
+          <DateTimePicker
             label={t('topology.at')}
-            title={t('topology.atHelp')}
+            placeholder={t('topology.now')}
+            leftSection={<IconClockHour4 size={16} aria-hidden />}
+            valueFormat={t('formats.dateTime')}
             value={at}
-            max={toLocalInput(new Date())}
-            onChange={(event) => {
-              setAt(event.currentTarget.value)
-            }}
-            rightSection={
-              at ? (
-                <ActionIcon
-                  variant="subtle"
-                  size="sm"
-                  onClick={() => {
-                    setAt('')
-                  }}
-                  aria-label={t('topology.now')}
-                >
-                  <IconX size={14} />
-                </ActionIcon>
-              ) : null
-            }
+            onChange={setAt}
+            presets={timePresets(t)}
+            maxDate={dayjs().format(PICKER_FORMAT)}
+            clearable
             w={230}
           />
+          {layer === 'l3' && hasManagementSubnets && (
+            <Switch
+              label={t('topology.management')}
+              title={t('topology.managementHelp')}
+              checked={showManagement}
+              onChange={(event) => {
+                setShowManagement(event.currentTarget.checked)
+              }}
+              mb={8}
+            />
+          )}
           <Group gap="xs" ml="auto">
             <Tooltip label={t('topology.saveLayout')}>
               <Button
@@ -459,7 +519,6 @@ export function TopologyPage() {
                 saveLayout.mutate([], {
                   onSuccess: () => {
                     setNotice(t('topology.layoutReset'))
-                    map.current?.fit()
                   },
                 })
               }}
@@ -486,11 +545,38 @@ export function TopologyPage() {
             </Button>
           </Group>
         </Group>
-        <Text size="xs" c="teal" mt={4} aria-live="polite">
-          {notice}
-          {at && ` ${t('topology.historic', { time: dateTime(new Date(at), i18n.language) })}`}
-        </Text>
+        {notice && (
+          <Text size="xs" c="teal" mt={4} aria-live="polite">
+            {notice}
+          </Text>
+        )}
       </Card>
+
+      {at && (
+        <Alert
+          color="violet"
+          variant="filled"
+          icon={<IconHistory aria-hidden />}
+          py="xs"
+          data-testid="historic-banner"
+        >
+          <Group justify="space-between" wrap="nowrap">
+            <Text fw={600} size="sm">
+              {t('topology.historicBanner', { time: dayjs(at).format(t('formats.dateTime')) })}
+            </Text>
+            <Button
+              size="xs"
+              variant="white"
+              color="violet"
+              onClick={() => {
+                setAt(null)
+              }}
+            >
+              {t('topology.backToNow')}
+            </Button>
+          </Group>
+        </Alert>
+      )}
 
       {topology.isError && (
         <ProblemAlert error={topology.error} onRetry={() => void topology.refetch()} />
@@ -513,7 +599,7 @@ export function TopologyPage() {
       ) : (
         <Group align="stretch" gap="sm" wrap="nowrap" style={{ flex: 1, minHeight: 0 }}>
           <Card withBorder padding={0} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-            <Legend />
+            <Legend layer={layer} />
             <CytoscapeMap
               ref={map}
               elements={elements}

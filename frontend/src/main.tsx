@@ -1,4 +1,5 @@
 import '@mantine/core/styles.css'
+import '@mantine/dates/styles.css'
 import './index.css'
 import './i18n'
 
@@ -8,6 +9,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router'
 
+import { LocalizedDates } from './app/LocalizedDates'
 import { router } from './app/router'
 import { theme } from './app/theme'
 
@@ -21,9 +23,11 @@ if (!container) throw new Error('index.html is missing the #root element')
 createRoot(container).render(
   <StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
+      <LocalizedDates>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </LocalizedDates>
     </MantineProvider>
   </StrictMode>,
 )

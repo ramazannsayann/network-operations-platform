@@ -38,3 +38,16 @@ test('the language can be switched to English', async ({ page }) => {
   await page.getByText('EN', { exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
 })
+
+test('time travel: presets, the historical banner and back to now', async ({ page }) => {
+  await page.goto('/topology')
+  await expect(page.getByTestId('topology-summary')).toHaveText('5 düğüm, 3 bağlantı')
+  await page.getByRole('button', { name: /Zaman/ }).click()
+  await page.getByRole('button', { name: '1 saat önce' }).click()
+  const banner = page.getByTestId('historic-banner')
+  await expect(banner).toContainText('Geçmiş görünüm:')
+  // Turkish date format, 24 h.
+  await expect(banner).toContainText(/\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}/)
+  await banner.getByRole('button', { name: 'Şimdiye dön' }).click()
+  await expect(banner).toBeHidden()
+})
