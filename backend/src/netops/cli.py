@@ -11,7 +11,7 @@ import sys
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 from sqlalchemy import func, or_, select
@@ -23,6 +23,9 @@ from netops.core.settings import get_settings
 from netops.db.enums import CredentialKind, DiscoveryItemStatus, JobStatus
 from netops.db.models import CredentialProfile, Device, DeviceSerial, DiscoveryRun, DiscoveryRunItem
 from netops.db.session import create_engine
+
+if TYPE_CHECKING:
+    from netops.db.enums import UserRole
 from netops.discovery.service import (
     CredentialProfileError,
     DiscoveryInProgressError,
@@ -35,6 +38,8 @@ app = typer.Typer(
 credentials = typer.Typer(help="Device credential profiles (SSH).", no_args_is_help=True)
 devices = typer.Typer(help="Inventory.", no_args_is_help=True)
 configs = typer.Typer(help="Configuration backups (M4).", no_args_is_help=True)
+users = typer.Typer(help="Platform users (M7).", no_args_is_help=True)
+app.add_typer(users, name="users")
 app.add_typer(credentials, name="credentials")
 app.add_typer(devices, name="devices")
 app.add_typer(configs, name="configs")
@@ -91,18 +96,25 @@ def credentials_add(
     enable_secret = Secret(_read_secret("Enable secret", False)) if enable else None
 
     async def store(session: AsyncSession) -> str:
+        from netops.auth.credentials import ProfileFields, create_profile, update_profile
+        from netops.auth.users import CLI
+
         profile = await session.scalar(
             select(CredentialProfile).where(CredentialProfile.name == name)
         )
         if profile is not None and not update:
             raise typer.BadParameter(f"profile {name!r} exists (use --update to replace it)")
+        fields = ProfileFields(
+            name=name,
+            username=username,
+            password=password,
+            enable_secret=enable_secret,
+            clear_enable_secret=enable_secret is None,
+        )
         if profile is None:
-            profile = CredentialProfile(id=uuid.uuid4(), name=name, kind=CredentialKind.SSH)
-            session.add(profile)
-        profile.username = username
-        profile.password = password
-        profile.enable_secret = enable_secret
-        await session.commit()
+            profile = await create_profile(session, CLI, CredentialKind.SSH, fields)
+        else:
+            profile = await update_profile(session, CLI, profile, fields)
         return str(profile.id)
 
     profile_id = _db(store)
@@ -341,3 +353,198 @@ def configs_backup(
             },
         )
     typer.echo(f"Configuration backup queued for {len(ids)} devices.")
+
+
+# --- users (M7) -------------------------------------------------------------------------------
+
+
+def _new_password(password_stdin: bool, label: str = "Password") -> str:
+    """Read a new password (hidden prompt with confirmation, or stdin) and check the
+    policy here, so a rejected one can be retyped."""
+    from netops.auth.passwords import check_policy
+
+    while True:
+        value = _read_secret(label, password_stdin)
+        violations = check_policy(value)
+        if not violations:
+            return value
+        message = " ".join(v.message for v in violations)
+        if password_stdin:
+            raise typer.BadParameter(message)
+        typer.echo(f"Rejected: {message}", err=True)
+
+
+def _role(value: str) -> "UserRole":
+    from netops.db.enums import UserRole
+
+    try:
+        return UserRole(value)
+    except ValueError:
+        choices = ", ".join(r.value for r in UserRole)
+        raise typer.BadParameter(f"role must be one of {choices}") from None
+
+
+def _create_user(
+    username: str,
+    display_name: str | None,
+    email: str | None,
+    role: "UserRole",
+    password: str,
+    must_change_password: bool,
+) -> str:
+    from netops.auth.service import ConflictError, PasswordRejectedError
+    from netops.auth.users import CLI, InvalidUsernameError, create_user
+
+    async def create(session: AsyncSession) -> str:
+        user = await create_user(
+            session,
+            CLI,
+            username=username,
+            display_name=display_name or username,
+            email=email,
+            role=role,
+            password=password,
+            must_change_password=must_change_password,
+        )
+        return str(user.id)
+
+    try:
+        return _db(create)
+    except (ConflictError, PasswordRejectedError, InvalidUsernameError) as exc:
+        raise typer.BadParameter(str(exc)) from None
+
+
+@users.command("create-admin")
+def users_create_admin(
+    username: Annotated[str, typer.Option(prompt=True, help="Login name (lower-cased).")],
+    display_name: Annotated[str | None, typer.Option(help="Full name.")] = None,
+    email: Annotated[str | None, typer.Option(help="Email address.")] = None,
+    password_stdin: Annotated[
+        bool, typer.Option("--password-stdin", help="Read the password from stdin.")
+    ] = False,
+    force: Annotated[
+        bool, typer.Option(help="Create one even though an active admin exists (asks first).")
+    ] = False,
+) -> None:
+    """Create the first admin (the platform has no default account). Refuses while an
+    active admin exists, unless --force is given and confirmed. The password is typed
+    hidden (twice) and never echoed; MFA enrollment follows at the first sign-in."""
+    from netops.auth.users import active_admins
+    from netops.db.enums import UserRole
+
+    admins = _db(active_admins)
+    if admins and not force:
+        raise typer.BadParameter(
+            f"{admins} active admin(s) exist; sign in as one of them, or use --force"
+        )
+    if admins and not typer.confirm(
+        f"{admins} active admin(s) already exist. Create another admin anyway?", default=False
+    ):
+        raise typer.Abort()
+    password = _new_password(password_stdin)
+    user_id = _create_user(username, display_name, email, UserRole.ADMIN, password, False)
+    typer.echo(f"Created admin {username.strip().lower()!r} ({user_id}).")
+
+
+@users.command("create")
+def users_create(
+    username: Annotated[str, typer.Argument(help="Login name (lower-cased).")],
+    role: Annotated[str, typer.Option(help="admin, operator or viewer.")] = "viewer",
+    display_name: Annotated[str | None, typer.Option(help="Full name.")] = None,
+    email: Annotated[str | None, typer.Option(help="Email address.")] = None,
+    password_stdin: Annotated[
+        bool, typer.Option("--password-stdin", help="Read the password from stdin.")
+    ] = False,
+    temporary: Annotated[
+        bool, typer.Option(help="The user must change the password at the first sign-in.")
+    ] = True,
+) -> None:
+    """Create a user (admins normally do this in the UI)."""
+    password = _new_password(password_stdin)
+    user_id = _create_user(username, display_name, email, _role(role), password, temporary)
+    typer.echo(f"Created user {username.strip().lower()!r} ({user_id}).")
+
+
+def _user_action(username: str, action: Callable[[AsyncSession, Any], Awaitable[None]]) -> None:
+    from netops.db.models import User
+
+    async def run(session: AsyncSession) -> bool:
+        user = await session.scalar(select(User).where(User.username == username.strip().lower()))
+        if user is None:
+            return False
+        await action(session, user)
+        return True
+
+    if not _db(run):
+        raise typer.BadParameter(f"no user {username!r}")
+
+
+@users.command("list")
+def users_list() -> None:
+    """List users with role, state and MFA (never their secrets)."""
+    from netops.db.models import User
+
+    async def load(session: AsyncSession) -> list[list[str]]:
+        rows = await session.scalars(select(User).order_by(User.username))
+        return [
+            [
+                u.username,
+                u.role.value,
+                "active" if u.is_active else "inactive",
+                "on" if u.mfa_enabled else "off",
+                u.last_login_at.isoformat(timespec="seconds") if u.last_login_at else "-",
+            ]
+            for u in rows
+        ]
+
+    _table(_db(load), ["USERNAME", "ROLE", "STATE", "MFA", "LAST LOGIN"])
+
+
+@users.command("set-password")
+def users_set_password(
+    username: Annotated[str, typer.Argument()],
+    password_stdin: Annotated[
+        bool, typer.Option("--password-stdin", help="Read the password from stdin.")
+    ] = False,
+    temporary: Annotated[
+        bool, typer.Option(help="The user must change it at the next sign-in.")
+    ] = True,
+) -> None:
+    """Set a user's password on the server (e.g. the only admin forgot theirs); ends the
+    user's sessions and lifts a lockout."""
+    from netops.auth.users import CLI, reset_password
+
+    password = _new_password(password_stdin)
+
+    async def act(session: AsyncSession, user: Any) -> None:
+        await reset_password(session, CLI, user, password)
+        if not temporary:
+            user.must_change_password = False
+            await session.commit()
+
+    _user_action(username, act)
+    typer.echo(f"Password of {username!r} set.")
+
+
+@users.command("reset-mfa")
+def users_reset_mfa(username: Annotated[str, typer.Argument()]) -> None:
+    """Remove a user's authenticator and recovery codes (lost phone)."""
+    from netops.auth.users import CLI, reset_mfa
+
+    async def act(session: AsyncSession, user: Any) -> None:
+        await reset_mfa(session, CLI, user)
+
+    _user_action(username, act)
+    typer.echo(f"MFA of {username!r} reset; they enroll again at the next sign-in.")
+
+
+@users.command("unlock")
+def users_unlock(username: Annotated[str, typer.Argument()]) -> None:
+    """Lift a lockout after failed sign-ins."""
+    from netops.auth.users import CLI, unlock
+
+    async def act(session: AsyncSession, user: Any) -> None:
+        await unlock(session, CLI, user)
+
+    _user_action(username, act)
+    typer.echo(f"{username!r} unlocked.")
