@@ -76,6 +76,44 @@ class Settings(BaseSettings):
     syslog_rate_per_source: float = Field(default=50.0, gt=0)
     syslog_burst_per_source: int = Field(default=200, ge=1)
 
+    # Authentication (M7, ADR-0008). Signs the access tokens (HS256): one or more
+    # comma-separated random keys of at least 32 characters; the first signs, every one
+    # verifies (rotation). No default on purpose: the API refuses to start without it.
+    auth_signing_key: SecretStr
+    auth_access_token_minutes: int = Field(default=15, ge=1, le=60)
+    # A refresh token lives this long unless used (each use rotates it); a session (token
+    # family) ends at the latest after auth_session_max_days.
+    auth_refresh_token_hours: int = Field(default=12, ge=1, le=24 * 30)
+    auth_session_max_days: int = Field(default=7, ge=1, le=90)
+    # Roles that must use TOTP. Comma-separated; empty: MFA is optional for everyone.
+    auth_mfa_required_roles: str = "admin,operator"
+    auth_mfa_issuer: str = "NetOps"
+    # Lockout after this many consecutive failures (password or MFA code): first for
+    # base seconds, doubling with every further failure up to the maximum.
+    auth_lockout_threshold: int = Field(default=5, ge=1)
+    auth_lockout_base_seconds: int = Field(default=60, ge=1)
+    auth_lockout_max_seconds: int = Field(default=3600, ge=1)
+    # Login and MFA requests per client address and window (Redis).
+    auth_rate_limit_per_ip: int = Field(default=30, ge=1)
+    auth_rate_limit_window_seconds: int = Field(default=300, ge=1)
+    # The refresh cookie's Secure flag: "auto" sets it when the request came over HTTPS.
+    auth_cookie_secure: Literal["auto", "true", "false"] = "auto"
+
+    @field_validator("auth_signing_key")
+    @classmethod
+    def _signing_keys(cls, value: SecretStr) -> SecretStr:
+        keys = [key.strip() for key in value.get_secret_value().split(",") if key.strip()]
+        if not keys or any(len(key) < 32 for key in keys):
+            raise ValueError(
+                "AUTH_SIGNING_KEY must hold one or more comma-separated random keys of at "
+                "least 32 characters; `make env` generates one into deploy/.env"
+            )
+        return value
+
+    @property
+    def mfa_required_roles(self) -> frozenset[str]:
+        return frozenset(r.strip() for r in self.auth_mfa_required_roles.split(",") if r.strip())
+
     @field_validator("config_backup_schedule")
     @classmethod
     def _cron(cls, value: str) -> str:
