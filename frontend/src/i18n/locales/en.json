@@ -288,7 +288,9 @@
       "duplicateNote": "Same chassis as {{device}} (same serial number)",
       "authFailedNote": "SSH login rejected ({{attempts}} attempts)",
       "unreachableNote": "Could not connect over SSH"
-    }
+    },
+    "readOnlyTitle": "View only",
+    "readOnly": "Your role cannot start discoveries; past runs are listed here."
   },
   "topology": {
     "title": "Map",

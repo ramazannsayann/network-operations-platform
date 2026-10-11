@@ -52,6 +52,7 @@ import {
   useTopology,
   useTopologyChanges,
 } from '../../api/queries'
+import { useCan } from '../../auth/context'
 import { EmptyState } from '../../components/EmptyState'
 import { ProblemAlert } from '../../components/ProblemAlert'
 import { RelativeTime } from '../../components/RelativeTime'
@@ -381,6 +382,7 @@ export function TopologyPage() {
   const topology = useTopology(query)
   const layout = useLayout(layer)
   const saveLayout = useSaveLayout(layer)
+  const canSaveLayout = useCan('topology:layout:write')
   const locations = useLocations()
 
   const elements = useMemo(() => {
@@ -494,37 +496,41 @@ export function TopologyPage() {
             />
           )}
           <Group gap="xs" ml="auto">
-            <Tooltip label={t('topology.saveLayout')}>
-              <Button
-                variant="default"
-                leftSection={<IconDeviceFloppy size={16} aria-hidden />}
-                loading={saveLayout.isPending}
-                disabled={nodeCount === 0}
-                onClick={() => {
-                  saveLayout.mutate(map.current?.positions() ?? [], {
-                    onSuccess: () => {
-                      setNotice(t('topology.layoutSaved'))
-                    },
-                  })
-                }}
-              >
-                {t('topology.saveLayout')}
-              </Button>
-            </Tooltip>
-            <Button
-              variant="default"
-              leftSection={<IconLayoutGrid size={16} aria-hidden />}
-              disabled={nodeCount === 0}
-              onClick={() => {
-                saveLayout.mutate([], {
-                  onSuccess: () => {
-                    setNotice(t('topology.layoutReset'))
-                  },
-                })
-              }}
-            >
-              {t('topology.autoLayout')}
-            </Button>
+            {canSaveLayout && (
+              <>
+                <Tooltip label={t('topology.saveLayout')}>
+                  <Button
+                    variant="default"
+                    leftSection={<IconDeviceFloppy size={16} aria-hidden />}
+                    loading={saveLayout.isPending}
+                    disabled={nodeCount === 0}
+                    onClick={() => {
+                      saveLayout.mutate(map.current?.positions() ?? [], {
+                        onSuccess: () => {
+                          setNotice(t('topology.layoutSaved'))
+                        },
+                      })
+                    }}
+                  >
+                    {t('topology.saveLayout')}
+                  </Button>
+                </Tooltip>
+                <Button
+                  variant="default"
+                  leftSection={<IconLayoutGrid size={16} aria-hidden />}
+                  disabled={nodeCount === 0}
+                  onClick={() => {
+                    saveLayout.mutate([], {
+                      onSuccess: () => {
+                        setNotice(t('topology.layoutReset'))
+                      },
+                    })
+                  }}
+                >
+                  {t('topology.autoLayout')}
+                </Button>
+              </>
+            )}
             <ActionIcon
               variant="default"
               size="lg"

@@ -33,6 +33,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 
 import type { Schemas } from '../../api/client'
 import { keys, useDevice, useInterfaces, useJob, useRefreshDevice } from '../../api/queries'
+import { useCan } from '../../auth/context'
 import { ProblemAlert } from '../../components/ProblemAlert'
 import { RelativeTime } from '../../components/RelativeTime'
 import { CollectionStatusBadge, ManagementStatusBadge } from '../../components/StatusBadges'
@@ -143,6 +144,7 @@ function RefreshButton({ device }: { device: Schemas['Device'] }) {
 
 export function DeviceDetailPage() {
   const { t } = useTranslation()
+  const canRefresh = useCan('devices:refresh')
   const { deviceId = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') === 'config' ? 'config' : 'overview'
@@ -192,7 +194,7 @@ export function DeviceDetailPage() {
           >
             {t('device.events')}
           </Button>
-          <RefreshButton device={d} />
+          {canRefresh && <RefreshButton device={d} />}
         </Group>
       </Group>
 

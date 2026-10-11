@@ -288,7 +288,9 @@
       "duplicateNote": "{{device}} ile aynı kasa (aynı seri numarası)",
       "authFailedNote": "SSH girişi reddedildi ({{attempts}} deneme)",
       "unreachableNote": "SSH ile bağlanılamadı"
-    }
+    },
+    "readOnlyTitle": "Yalnızca görüntüleme",
+    "readOnly": "Rolünüz keşif başlatamaz; geçmiş keşifleri görebilirsiniz."
   },
   "topology": {
     "title": "Harita",

@@ -40,6 +40,7 @@ import {
   useJob,
   useRefreshDevice,
 } from '../../api/queries'
+import { useCan } from '../../auth/context'
 import { ProblemAlert } from '../../components/ProblemAlert'
 import { RelativeTime } from '../../components/RelativeTime'
 import { dateTime } from '../../lib/format'
@@ -192,6 +193,7 @@ function VersionMeta({ version }: { version: Version }) {
 /** The Config tab of a device: version timeline, redacted viewer, diffs and changes. */
 export function ConfigTab({ device }: { device: Schemas['Device'] }) {
   const { t, i18n } = useTranslation()
+  const canBackup = useCan('configs:backup')
   const [params, setParams] = useSearchParams()
   const versions = useDeviceConfigs(device.id)
   const changes = useConfigChanges({ device_id: device.id, limit: 200 })
@@ -242,7 +244,7 @@ export function ConfigTab({ device }: { device: Schemas['Device'] }) {
               </Text>
             )}
           </Title>
-          <BackupButton device={device} />
+          {canBackup && <BackupButton device={device} />}
         </Group>
         <Alert variant="light" color="gray" icon={<IconInfoCircle size={18} />} mb="md">
           {t('configs.redaction.notice')}
