@@ -7,7 +7,7 @@ from pydantic import AwareDatetime, Field, IPvAnyAddress, SecretStr, model_valid
 
 from netops.api.schemas import examples as ex
 from netops.api.schemas.common import ApiModel, Page, example
-from netops.auth.rbac import Permission
+from netops.auth.rbac import Permission, permissions_of
 from netops.auth.service import Requirement
 from netops.db.enums import UserRole
 
@@ -81,7 +81,7 @@ class CurrentUser(ApiModel):
             "display_name": "NOC Operator 1",
             "email": "operator1@example.net",
             "role": "operator",
-            "permissions": ["devices:read", "devices:refresh", "discovery:run", "profile:self"],
+            "permissions": sorted(p.value for p in permissions_of(UserRole.OPERATOR)),
             "mfa_enabled": True,
             "mfa_required": True,
             "requirements": [],
